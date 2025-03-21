@@ -1,0 +1,86 @@
+# utils/form_config.py
+MATCH_INFO = {
+    'basic_info': [
+        {'name': 'team_number', 'label': 'Team Number', 'type': 'text'},
+        {'name': 'match_number', 'label': 'Match Number', 'type': 'text'},
+        {'name': 'alliance_color', 'label': 'Alliance', 'type': 'select', 'options': ['Red', 'Blue']},
+        {'name': 'scouter_name', 'label': 'Scouter Name', 'type': 'text'},
+        # Removed 'match_result' from here
+    ],
+    'starting_position': {
+        'name': 'starting_position',
+        'label': 'Starting Position',
+        'type': 'radio',
+        'options': ['Left', 'Center', 'Right']
+    }
+}
+
+AUTONOMOUS = {
+    'scoring': [
+        {'name': 'auto_coral_l1', 'label': 'Coral Scored on L1', 'type': 'number'},
+        {'name': 'auto_coral_l2', 'label': 'Coral Scored on L2', 'type': 'number'},
+        {'name': 'auto_coral_l3', 'label': 'Coral Scored on L3', 'type': 'number'},
+        {'name': 'auto_coral_l4', 'label': 'Coral Scored on L4', 'type': 'number'}
+    ],
+    'missed_attempts': [
+        {'name': 'auto_missed_coral_l1', 'label': 'Coral Missed on L1', 'type': 'number'},
+        {'name': 'auto_missed_coral_l2', 'label': 'Coral Missed on L2', 'type': 'number'},
+        {'name': 'auto_missed_coral_l3', 'label': 'Coral Missed on L3', 'type': 'number'},
+        {'name': 'auto_missed_coral_l4', 'label': 'Coral Missed on L4', 'type': 'number'}
+    ],
+    'algae_management': [
+        {'name': 'auto_algae_barge', 'label': 'Algae Scored on Barge', 'type': 'number'},
+        {'name': 'auto_algae_processor', 'label': 'Algae Scored on Processor', 'type': 'number'},
+        {'name': 'auto_missed_algae_barge', 'label': 'Algae Missed on Barge', 'type': 'number'},
+        {'name': 'auto_missed_algae_processor', 'label': 'Algae Missed on Processor', 'type': 'number'},
+        {'name': 'auto_algae_removed', 'label': 'Algae Removed from Reef', 'type': 'number'}
+    ]
+}
+
+TELEOP = {
+    'scoring': [
+        {'name': 'teleop_coral_l1', 'label': 'Coral Scored on L1', 'type': 'number'},
+        {'name': 'teleop_coral_l2', 'label': 'Coral Scored on L2', 'type': 'number'},
+        {'name': 'teleop_coral_l3', 'label': 'Coral Scored on L3', 'type': 'number'},
+        {'name': 'teleop_coral_l4', 'label': 'Coral Scored on L4', 'type': 'number'}
+    ],
+    'missed_attempts': [
+        {'name': 'teleop_missed_coral_l1', 'label': 'Coral Missed on L1', 'type': 'number'},
+        {'name': 'teleop_missed_coral_l2', 'label': 'Coral Missed on L2', 'type': 'number'},
+        {'name': 'teleop_missed_coral_l3', 'label': 'Coral Missed on L3', 'type': 'number'},
+        {'name': 'teleop_missed_coral_l4', 'label': 'Coral Missed on L4', 'type': 'number'}
+    ],
+    'algae_management': [
+        {'name': 'teleop_algae_barge', 'label': 'Algae Scored on Barge', 'type': 'number'},
+        {'name': 'teleop_algae_processor', 'label': 'Algae Scored on Processor', 'type': 'number'},
+        {'name': 'teleop_missed_algae_barge', 'label': 'Algae Missed on Barge', 'type': 'number'},
+        {'name': 'teleop_missed_algae_processor', 'label': 'Algae Missed on Processor', 'type': 'number'},
+        {'name': 'teleop_algae_removed', 'label': 'Algae Removed from Reef', 'type': 'number'}
+    ]
+}
+
+ENDGAME = {
+    'climb_status': {
+        'name': 'climb_status',
+        'label': 'Climb Status',
+        'type': 'select',
+        'options': ['No Climb', 'Parked', 'Shallow Climb', 'Deep Climb']
+    }
+}
+
+PERFORMANCE_RATINGS = {
+    'ratings': [
+        {'name': 'defense_rating', 'label': 'Defense Rating', 'type': 'slider', 'min': 1, 'max': 5},
+        {'name': 'speed_rating', 'label': 'Speed Rating', 'type': 'slider', 'min': 1, 'max': 5},
+        {'name': 'driver_skill_rating', 'label': 'Driver Skill Rating', 'type': 'slider', 'min': 1, 'max': 5}
+    ]
+}
+
+ANALYSIS = {
+    'questions': [
+        {'name': 'defense_qa', 'label': 'Defense Q/A', 'type': 'textarea', 'help': 'How did they play defense, push power or speed? (if not defense put N/A)'},
+        {'name': 'teleop_qa', 'label': 'Teleop Q/A', 'type': 'textarea', 'help': 'How are they scoring (ground/station), speed, skill?'},
+        {'name': 'auto_qa', 'label': 'Autonomous Q/A', 'type': 'textarea', 'help': 'Speed, Path, Accuracy'},
+        {'name': 'comments', 'label': 'Additional Comments', 'type': 'textarea'}
+    ]
+}
