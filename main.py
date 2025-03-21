@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from utils.utils import load_data, save_data, calculate_match_score, initialize_firestore, db
+from utils.utils import load_data, calculate_match_score
 
 # Set page configuration
 st.set_page_config(
@@ -33,7 +33,7 @@ footer {visibility: hidden;}
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# Sidebar navigation is automatically handled by Streamlit via the pages/ directory
+# Main content
 st.title("FRC 2025 Scouting Dashboard")
 st.markdown("""
 Welcome to the FRC 2025 Scouting Dashboard! This tool helps teams collect and analyze match data.
@@ -133,24 +133,3 @@ def display_quick_stats():
 # App Layout
 display_quick_stats()
 display_recent_matches()
-
-# Data Management in Sidebar
-st.sidebar.title("Data Management")
-# Removed the "Clear All Data" button and its associated logic
-
-# Debug Section for Firestore Status
-with st.sidebar.expander("Firestore Debug Info"):
-    st.write("Use this section to debug Firestore connectivity issues.")
-    if st.button("Check Firestore Connection"):
-        error = initialize_firestore()
-        if error:
-            st.error(f"Firestore connection failed: {error}")
-        else:
-            st.success("Firestore connection successful!")
-            # Try fetching a small number of documents to verify access
-            try:
-                docs = db.collection(COLLECTION_NAME).limit(1).get()
-                doc_count = len(docs)
-                st.write(f"Successfully accessed the '{COLLECTION_NAME}' collection. Found {doc_count} document(s).")
-            except Exception as e:
-                st.error(f"Error accessing Firestore collection: {str(e)}")
