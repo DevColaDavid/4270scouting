@@ -1,13 +1,18 @@
-# pages/3_Data_Analysis.py
+# pages/2_Data_Analysis.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from utils.utils import load_data, calculate_match_score, calculate_epa
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="Data Analysis", page_icon="📈", layout="wide")
 
+# Auto-refresh every 10 seconds (10000 milliseconds)
+st_autorefresh(interval=10000, key="data_analysis_refresh")
+
 st.title("Data Analysis")
+st.info("This page automatically updates every 10 seconds to reflect new scouting data.")
 
 # Load data
 df = load_data()

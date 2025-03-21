@@ -1,12 +1,17 @@
-# pages/2_Team_Statistics.py
+# pages/3_Team_Statistics.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from utils.utils import load_data, calculate_match_score
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="Team Statistics", page_icon="📊")
 
+# Auto-refresh every 10 seconds (10000 milliseconds)
+st_autorefresh(interval=10000, key="team_statistics_refresh")
+
 st.title("Team Statistics")
+st.info("This page automatically updates every 10 seconds to reflect new scouting data.")
 
 # Load data
 df = load_data()
