@@ -5,11 +5,6 @@ import streamlit as st
 from google.cloud import firestore
 from google.oauth2 import service_account
 from datetime import datetime
-import logging  # Import logging for better error tracking
-
-# Set up logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
 
 # Firestore client (will be initialized lazily)
 db = None
@@ -24,28 +19,19 @@ def initialize_firestore():
         return None  # Already initialized, no error
 
     try:
-        logger.debug("Initializing Firestore...")
         # On Streamlit Community Cloud, use secrets
         if "firebase" in st.secrets:
-            logger.debug("Using Streamlit secrets for Firestore credentials.")
             creds = service_account.Credentials.from_service_account_info(st.secrets["firebase"])
             db = firestore.Client(credentials=creds, project=st.secrets["firebase"]["project_id"])
-            logger.debug("Firestore initialized successfully with secrets.")
             return None  # Success
         else:
             # Locally, use the JSON key file
-            logger.debug("Looking for firestore-key.json locally...")
             if not os.path.exists("firestore-key.json"):
-                error_msg = "firestore-key.json not found. Please ensure the file exists in the project directory."
-                logger.error(error_msg)
-                return error_msg
+                return "firestore-key.json not found. Please ensure the file exists in the project directory."
             db = firestore.Client.from_service_account_json("firestore-key.json")
-            logger.debug("Firestore initialized successfully with local key file.")
             return None  # Success
     except Exception as e:
-        error_msg = f"Error initializing Firestore: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return error_msg
+        return f"Error initializing Firestore: {str(e)}"
 
 def load_data():
     try:
@@ -53,16 +39,12 @@ def load_data():
         error = initialize_firestore()
         if error:
             st.error(error)
-            logger.error(f"Firestore initialization failed: {error}")
             return pd.DataFrame()
 
         if db is None:
-            error_msg = "Firestore database not initialized."
-            st.error(error_msg)
-            logger.error(error_msg)
+            st.error("Firestore database not initialized.")
             return pd.DataFrame()
 
-        logger.debug("Fetching documents from Firestore collection: %s", COLLECTION_NAME)
         # Fetch all documents from the scouting_data collection
         docs = db.collection(COLLECTION_NAME).stream()
         data = []
@@ -117,11 +99,9 @@ def load_data():
         }
 
         if not data:
-            logger.debug("No data found in Firestore, returning empty DataFrame.")
             # Return an empty DataFrame with all expected columns
             return pd.DataFrame(columns=list(expected_columns.keys()))
 
-        logger.debug("Converting Firestore data to DataFrame...")
         # Convert the list of dictionaries to a DataFrame
         df = pd.DataFrame(data)
 
@@ -154,13 +134,10 @@ def load_data():
             if col in df.columns:
                 df[col] = df[col].astype(str).fillna('')
 
-        logger.debug("DataFrame created successfully with columns: %s", df.columns.tolist())
         return df[list(expected_columns.keys())]
 
     except Exception as e:
-        error_msg = f"Error loading data from Firestore: {str(e)}"
-        st.error(error_msg)
-        logger.error(error_msg, exc_info=True)
+        st.error(f"Error loading data from Firestore: {str(e)}")
         return pd.DataFrame()
 
 def save_data(match_data):
@@ -169,26 +146,19 @@ def save_data(match_data):
     Returns: (success, message)
     """
     try:
-        logger.debug("Starting save_data with match_data: %s", match_data)
-
         # Initialize Firestore if not already initialized
         error = initialize_firestore()
         if error:
             st.error(error)
-            logger.error(f"Firestore initialization failed: {error}")
             return False, None
 
         if db is None:
-            error_msg = "Firestore database not initialized."
-            st.error(error_msg)
-            logger.error(error_msg)
+            st.error("Firestore database not initialized.")
             return False, None
 
         # Ensure match_data is a dictionary
         if not isinstance(match_data, dict):
-            error_msg = f"Expected match_data to be a dictionary, got {type(match_data)}"
-            st.error(error_msg)
-            logger.error(error_msg)
+            st.error(f"Expected match_data to be a dictionary, got {type(match_data)}")
             return False, None
 
         # Convert match_data values to a Firestore-compatible format
@@ -198,57 +168,41 @@ def save_data(match_data):
                 if len(v) == 1:
                     v = v.iloc[0]
                 else:
-                    error_msg = f"Value for {k} is a Series with multiple values: {v}"
-                    st.error(error_msg)
-                    logger.error(error_msg)
+                    st.error(f"Value for {k} is a Series with multiple values: {v}")
                     return False, None
             if pd.isna(v):
                 cleaned_data[k] = None
             else:
                 cleaned_data[k] = v
 
-        logger.debug("Cleaned data: %s", cleaned_data)
-
         # Add a timestamp if not present
         if 'timestamp' not in cleaned_data or not cleaned_data['timestamp']:
             cleaned_data['timestamp'] = datetime.now().isoformat()
-            logger.debug("Added timestamp: %s", cleaned_data['timestamp'])
 
         # Ensure team_number and match_number are present and valid
         if 'team_number' not in cleaned_data or cleaned_data['team_number'] is None:
-            error_msg = "Team number is missing in match data."
-            st.error(error_msg)
-            logger.error(error_msg)
+            st.error("Team number is missing in match data.")
             return False, None
         if 'match_number' not in cleaned_data or cleaned_data['match_number'] is None:
-            error_msg = "Match number is missing in match data."
-            st.error(error_msg)
-            logger.error(error_msg)
+            st.error("Match number is missing in match data.")
             return False, None
 
         team_number = str(cleaned_data['team_number']).strip()
         match_number = str(cleaned_data['match_number']).strip()
         if not team_number or not match_number:
-            error_msg = "Team number or match number is empty."
-            st.error(error_msg)
-            logger.error(error_msg)
+            st.error("Team number or match number is empty.")
             return False, None
 
         # Create a unique document ID using team_number, match_number, and timestamp
         timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
         doc_id = f"team{team_number}_match{match_number}_{timestamp}"
-        logger.debug("Generated document ID: %s", doc_id)
 
         # Save the data with the custom document ID
-        logger.debug("Saving data to Firestore: %s", cleaned_data)
         db.collection(COLLECTION_NAME).document(doc_id).set(cleaned_data)
-        logger.debug("Data saved successfully with doc_id: %s", doc_id)
         return True, doc_id
 
     except Exception as e:
-        error_msg = f"Error saving data to Firestore: {str(e)}"
-        st.error(error_msg)
-        logger.error(error_msg, exc_info=True)
+        st.error(f"Error saving data to Firestore: {str(e)}")
         return False, str(e)
 
 def calculate_match_score(row):
