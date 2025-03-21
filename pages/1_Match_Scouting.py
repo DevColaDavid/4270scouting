@@ -1,216 +1,176 @@
 # pages/1_Match_Scouting.py
 import streamlit as st
 import pandas as pd
-from utils.utils import load_data, save_data, validate_team_number, validate_match_number
-from utils.form_config import MATCH_INFO, AUTONOMOUS, TELEOP, ENDGAME, PERFORMANCE_RATINGS, ANALYSIS
+from datetime import datetime
+from utils.utils import save_data
 
-# Page configuration
-st.title("Match Scouting Form")
+st.set_page_config(page_title="Match Scouting", page_icon="📝")
 
-# Optimized form field renderer
-def render_form_field(field, prefix):
-    key = f"{prefix}_{field['name']}"
-    field_types = {
-        'number': lambda: st.number_input(field['label'], min_value=0, value=0, step=1, key=key),
-        'text': lambda: st.text_input(field['label'], key=key),
-        'boolean': lambda: st.checkbox(field['label'], key=key),
-        'select': lambda: st.selectbox(field['label'], field['options'], key=key),
-        'radio': lambda: st.radio(field['label'], field['options'], horizontal=True, key=key),
-        'checkbox': lambda: st.checkbox(field['label'], key=key),
-        'slider': lambda: st.slider(field['label'], field['min'], field['max'], (field['max'] + field['min']) // 2, key=key),
-        'textarea': lambda: st.text_area(field['label'], help=field.get('help', ''), key=key),
-    }
-    return field_types.get(field['type'], lambda: None)()
+st.title("Match Scouting")
+st.markdown("Enter match data for scouting. All fields are required unless specified.")
 
-# Helper function to render sections
-def render_section(section_title, fields, prefix, columns=2, expander=True):
-    if expander:
-        with st.expander(section_title, expanded=True):
-            cols = st.columns(columns)
-            for i, field in enumerate(fields):
-                with cols[i % columns]:
-                    form_data[field['name']] = render_form_field(field, prefix)
-    else:
-        st.markdown(f"#### {section_title}")
-        cols = st.columns(columns)
-        for i, field in enumerate(fields):
-            with cols[i % columns]:
-                form_data[field['name']] = render_form_field(field, prefix)
+# Form for match scouting
+with st.form(key="match_scouting_form"):
+    # Team and Match Information
+    st.subheader("Team and Match Information")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        team_number = st.number_input("Team Number", min_value=1, step=1)
+    with col2:
+        match_number = st.number_input("Match Number", min_value=1, step=1)
+    with col3:
+        alliance_color = st.selectbox("Alliance Color", options=["Red", "Blue"])
 
-# Clear Streamlit cache to reset expander states
-st.cache_data.clear()
+    scouter_name = st.text_input("Scouter Name")
+    starting_position = st.selectbox("Starting Position", options=["Left", "Center", "Right"])
 
-# Initialize session state for feedback and duplicate handling
-if "submit_status" not in st.session_state:
-    st.session_state.submit_status = None
-if "duplicate_data" not in st.session_state:
-    st.session_state.duplicate_data = None
-if "form_data" not in st.session_state:
-    st.session_state.form_data = None
+    # Auto Period
+    st.subheader("Auto Period")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        auto_coral_l1 = st.number_input("Auto Coral L1", min_value=0, step=1)
+    with col2:
+        auto_coral_l2 = st.number_input("Auto Coral L2", min_value=0, step=1)
+    with col3:
+        auto_coral_l3 = st.number_input("Auto Coral L3", min_value=0, step=1)
+    with col4:
+        auto_coral_l4 = st.number_input("Auto Coral L4", min_value=0, step=1)
 
-# Instructions (collapsed by default)
-with st.expander("Instructions"):
-    st.write("""
-    - **Team Number**: Enter the competing team's number (e.g., 1234).
-    - **Match Number**: Enter the match number (e.g., 1-150).
-    - **Match Result**: Select the outcome of the match for this team's alliance (Win, Loss, or Tie) at the end of the form.
-    - Fill out all sections based on the robot's performance during the match.
-    - Use the 'Analysis' section for qualitative observations.
-    """)
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        auto_missed_coral_l1 = st.number_input("Auto Missed Coral L1", min_value=0, step=1)
+    with col2:
+        auto_missed_coral_l2 = st.number_input("Auto Missed Coral L2", min_value=0, step=1)
+    with col3:
+        auto_missed_coral_l3 = st.number_input("Auto Missed Coral L3", min_value=0, step=1)
+    with col4:
+        auto_missed_coral_l4 = st.number_input("Auto Missed Coral L4", min_value=0, step=1)
 
-# Form
-form_data = {}
-with st.form("scouting_form"):
-    # Match Information (expanded by default)
-    with st.expander("Match Information", expanded=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            form_data['team_number'] = render_form_field(MATCH_INFO['basic_info'][0], 'match_info')
-            form_data['match_number'] = render_form_field(MATCH_INFO['basic_info'][1], 'match_info')
-        with col2:
-            form_data['alliance_color'] = render_form_field(MATCH_INFO['basic_info'][2], 'match_info')
-            form_data['scouter_name'] = render_form_field(MATCH_INFO['basic_info'][3], 'match_info')
-        form_data['starting_position'] = render_form_field(MATCH_INFO['starting_position'], 'match_info')
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        auto_algae_barge = st.number_input("Auto Algae Barge", min_value=0, step=1)
+    with col2:
+        auto_algae_processor = st.number_input("Auto Algae Processor", min_value=0, step=1)
+    with col3:
+        auto_algae_removed = st.number_input("Auto Algae Removed", min_value=0, step=1)
 
-    # Autonomous (expanded by default)
-    with st.expander("Autonomous", expanded=True):
-        render_section("Coral Scored", AUTONOMOUS['scoring'], 'auto', expander=False)
-        render_section("Coral Missed", AUTONOMOUS['missed_attempts'], 'auto', expander=False)
-        render_section("Algae Management", AUTONOMOUS['algae_management'], 'auto', expander=False)
+    col1, col2 = st.columns(2)
+    with col1:
+        auto_missed_algae_barge = st.number_input("Auto Missed Algae Barge", min_value=0, step=1)
+    with col2:
+        auto_missed_algae_processor = st.number_input("Auto Missed Algae Processor", min_value=0, step=1)
 
-    # Teleop (expanded by default)
-    with st.expander("Teleop", expanded=True):
-        render_section("Coral Scored", TELEOP['scoring'], 'teleop', expander=False)
-        render_section("Coral Missed", TELEOP['missed_attempts'], 'teleop', expander=False)
-        render_section("Algae Management", TELEOP['algae_management'], 'teleop', expander=False)
+    # Teleop Period
+    st.subheader("Teleop Period")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        teleop_coral_l1 = st.number_input("Teleop Coral L1", min_value=0, step=1)
+    with col2:
+        teleop_coral_l2 = st.number_input("Teleop Coral L2", min_value=0, step=1)
+    with col3:
+        teleop_coral_l3 = st.number_input("Teleop Coral L3", min_value=0, step=1)
+    with col4:
+        teleop_coral_l4 = st.number_input("Teleop Coral L4", min_value=0, step=1)
 
-    # Endgame (expanded by default)
-    with st.expander("Endgame", expanded=True):
-        form_data['climb_status'] = render_form_field(ENDGAME['climb_status'], 'endgame')
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        teleop_missed_coral_l1 = st.number_input("Teleop Missed Coral L1", min_value=0, step=1)
+    with col2:
+        teleop_missed_coral_l2 = st.number_input("Teleop Missed Coral L2", min_value=0, step=1)
+    with col3:
+        teleop_missed_coral_l3 = st.number_input("Teleop Missed Coral L3", min_value=0, step=1)
+    with col4:
+        teleop_missed_coral_l4 = st.number_input("Teleop Missed Coral L4", min_value=0, step=1)
 
-    # Performance Ratings (expanded by default)
-    with st.expander("Performance Ratings", expanded=True):
-        cols = st.columns(3)
-        for i, field in enumerate(PERFORMANCE_RATINGS['ratings']):
-            with cols[i]:
-                form_data[field['name']] = render_form_field(field, 'performance')
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        teleop_algae_barge = st.number_input("Teleop Algae Barge", min_value=0, step=1)
+    with col2:
+        teleop_algae_processor = st.number_input("Teleop Algae Processor", min_value=0, step=1)
+    with col3:
+        teleop_algae_removed = st.number_input("Teleop Algae Removed", min_value=0, step=1)
 
-    # Analysis (expanded by default)
-    with st.expander("Analysis", expanded=True):
-        for field in ANALYSIS['questions']:
-            form_data[field['name']] = render_form_field(field, 'analysis')
+    col1, col2 = st.columns(2)
+    with col1:
+        teleop_missed_algae_barge = st.number_input("Teleop Missed Algae Barge", min_value=0, step=1)
+    with col2:
+        teleop_missed_algae_processor = st.number_input("Teleop Missed Algae Processor", min_value=0, step=1)
 
-    # Match Result (added at the bottom)
-    st.markdown("#### Match Result")
-    form_data['match_result'] = st.selectbox("Match Result", ['Win', 'Loss', 'Tie'], key='match_result')
+    # Endgame
+    st.subheader("Endgame")
+    climb_status = st.selectbox("Climb Status", options=["No Climb", "Shallow Climb", "Deep Climb"])
 
-    # Submit and Reset Buttons
-    col_submit, col_reset = st.columns(2)
-    with col_submit:
-        submitted = st.form_submit_button("Submit Match Data")
-    with col_reset:
-        reset = st.form_submit_button("Reset Form")
+    # Ratings
+    st.subheader("Ratings")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        defense_rating = st.slider("Defense Rating", min_value=1.0, max_value=5.0, step=0.5)
+    with col2:
+        speed_rating = st.slider("Speed Rating", min_value=1.0, max_value=5.0, step=0.5)
+    with col3:
+        driver_skill_rating = st.slider("Driver Skill Rating", min_value=1.0, max_value=5.0, step=0.5)
 
-    # Form Submission Logic (Inside Form)
+    # Qualitative Assessments
+    st.subheader("Qualitative Assessments")
+    defense_qa = st.text_area("Defense QA", placeholder="Notes on defense performance")
+    teleop_qa = st.text_area("Teleop QA", placeholder="Notes on teleop performance")
+    auto_qa = st.text_area("Auto QA", placeholder="Notes on auto performance")
+    comments = st.text_area("General Comments", placeholder="Additional comments")
+
+    # Match Result
+    match_result = st.selectbox("Match Result", options=["Win", "Loss", "Tie"])
+
+    # Submit Button
+    submitted = st.form_submit_button("Submit Match Data")
+
     if submitted:
-        team_valid = validate_team_number(form_data['team_number'])
-        match_valid = validate_match_number(form_data['match_number'])
+        # Collect all data into a dictionary
+        match_data = {
+            "team_number": team_number,
+            "match_number": match_number,
+            "alliance_color": alliance_color,
+            "scouter_name": scouter_name,
+            "starting_position": starting_position,
+            "auto_coral_l1": auto_coral_l1,
+            "auto_coral_l2": auto_coral_l2,
+            "auto_coral_l3": auto_coral_l3,
+            "auto_coral_l4": auto_coral_l4,
+            "auto_missed_coral_l1": auto_missed_coral_l1,
+            "auto_missed_coral_l2": auto_missed_coral_l2,
+            "auto_missed_coral_l3": auto_missed_coral_l3,
+            "auto_missed_coral_l4": auto_missed_coral_l4,
+            "auto_algae_barge": auto_algae_barge,
+            "auto_algae_processor": auto_algae_processor,
+            "auto_missed_algae_barge": auto_missed_algae_barge,
+            "auto_missed_algae_processor": auto_missed_algae_processor,
+            "auto_algae_removed": auto_algae_removed,
+            "teleop_coral_l1": teleop_coral_l1,
+            "teleop_coral_l2": teleop_coral_l2,
+            "teleop_coral_l3": teleop_coral_l3,
+            "teleop_coral_l4": teleop_coral_l4,
+            "teleop_missed_coral_l1": teleop_missed_coral_l1,
+            "teleop_missed_coral_l2": teleop_missed_coral_l2,
+            "teleop_missed_coral_l3": teleop_missed_coral_l3,
+            "teleop_missed_coral_l4": teleop_missed_coral_l4,
+            "teleop_algae_barge": teleop_algae_barge,
+            "teleop_algae_processor": teleop_algae_processor,
+            "teleop_missed_algae_barge": teleop_missed_algae_barge,
+            "teleop_missed_algae_processor": teleop_missed_algae_processor,
+            "teleop_algae_removed": teleop_algae_removed,
+            "climb_status": climb_status,
+            "defense_rating": defense_rating,
+            "speed_rating": speed_rating,
+            "driver_skill_rating": driver_skill_rating,
+            "defense_qa": defense_qa,
+            "teleop_qa": teleop_qa,
+            "auto_qa": auto_qa,
+            "comments": comments,
+            "match_result": match_result,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
 
-        if team_valid and match_valid:
-            form_data['team_number'] = int(form_data['team_number'])
-            form_data['match_number'] = int(form_data['match_number'])
-            form_data['timestamp'] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-            new_data = pd.DataFrame([form_data])
-            existing_data = load_data()
-
-            # Check for duplicates
-            if not existing_data.empty:
-                duplicate = existing_data[
-                    (existing_data['team_number'] == form_data['team_number']) &
-                    (existing_data['match_number'] == form_data['match_number'])
-                ]
-                if not duplicate.empty:
-                    st.session_state.duplicate_data = duplicate
-                    st.session_state.form_data = form_data
-                    st.session_state.submit_status = "duplicate"
-                else:
-                    combined_data = pd.concat([existing_data, new_data], ignore_index=True) if not existing_data.empty else new_data
-                    if save_data(combined_data):
-                        st.session_state.submit_status = "success"
-                    else:
-                        st.session_state.submit_status = "error"
-            else:
-                if save_data(new_data):
-                    st.session_state.submit_status = "success"
-                else:
-                    st.session_state.submit_status = "error"
+        # Save the data (debug statements removed)
+        if save_data(match_data):
+            st.success("Match data submitted successfully!")
         else:
-            if not team_valid:
-                st.warning("Team number must be a positive integer.")
-            if not match_valid:
-                st.warning("Match number must be between 1 and 150.")
-
-    if reset:
-        st.session_state.duplicate_data = None
-        st.session_state.form_data = None
-        st.experimental_rerun()
-
-# Handle Duplicate Logic (Outside Form)
-if st.session_state.submit_status == "duplicate" and st.session_state.duplicate_data is not None:
-    st.warning("Data for this team and match already exists!")
-    st.dataframe(st.session_state.duplicate_data)
-    if st.button("Overwrite Existing Data"):
-        existing_data = load_data()
-        form_data = st.session_state.form_data
-        new_data = pd.DataFrame([form_data])
-        existing_data = existing_data[
-            (existing_data['team_number'] != form_data['team_number']) |
-            (existing_data['match_number'] != form_data['match_number'])
-        ]
-        combined_data = pd.concat([existing_data, new_data], ignore_index=True)
-        if save_data(combined_data):
-            st.session_state.submit_status = "success"
-        else:
-            st.session_state.submit_status = "error"
-        st.session_state.duplicate_data = None
-        st.session_state.form_data = None
-
-# Display Feedback
-if st.session_state.submit_status == "success":
-    st.success("Match data saved successfully!")
-    st.balloons()
-    st.session_state.submit_status = None
-elif st.session_state.submit_status == "error":
-    st.error("Error saving match data.")
-    st.session_state.submit_status = None
-
-# Display Existing Data and Stats
-df = load_data()
-if df is not None and not df.empty:
-    st.subheader("Recent Matches")
-    st.dataframe(df.tail())
-
-    st.subheader("Quick Stats")
-    st.write(f"Total Responses Submitted: {len(df)}")
-    if 'match_number' in df.columns:
-        st.write(f"Total Unique Matches: {df['match_number'].nunique()}")
-    else:
-        st.write("Total Unique Matches: N/A (No match number data available)")
-    if 'auto_coral_l1' in df.columns:
-        st.write(f"Average Auto Coral Scored on L1: {df['auto_coral_l1'].mean():.2f}")
-    else:
-        st.write("Average Auto Coral Scored on L1: N/A (No data available)")
-    if 'teleop_coral_l1' in df.columns:
-        st.write(f"Average Teleop Coral Scored on L1: {df['teleop_coral_l1'].mean():.2f}")
-    else:
-        st.write("Average Teleop Coral Scored on L1: N/A (No data available)")
-
-    csv = df.to_csv(index=False)
-    st.download_button(
-        label="Download All Data as CSV",
-        data=csv,
-        file_name=f"match_scouting_data_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
-        mime="text/csv",
-    )
-else:
-    st.info("No match data available yet. Submit some data to see statistics.")
+            st.error("Error saving match data.")

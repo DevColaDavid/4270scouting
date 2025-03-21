@@ -93,7 +93,7 @@ def display_quick_stats():
                 'teleop_algae_barge', 'teleop_algae_processor', 'teleop_algae_removed',
                 'climb_status'
             ]
-            missing_columns = [col for col in required_columns if col not in df.columns]
+            missing_columns = [col for col in required_columns if col in df.columns]
             if missing_columns:
                 st.warning(f"Cannot calculate match scores for statistics. Missing columns: {missing_columns}")
                 return
@@ -132,21 +132,11 @@ st.sidebar.title("Data Management")
 if st.sidebar.button("⚠️ Clear All Data"):
     # Add a confirmation prompt to prevent accidental data deletion
     if st.sidebar.checkbox("Are you sure? This will delete all data.", key="confirm_clear_data"):
-        if clear_data():
+        result = clear_data()
+        if result:
             st.sidebar.success("All data cleared successfully!")
             st.rerun()
         else:
-            st.sidebar.error("Error clearing data.")
+            st.sidebar.error("Failed to clear data. Check the logs for details.")
     else:
         st.sidebar.warning("Please confirm to clear all data.")
-
-# Add a download button for scouting_data.csv
-df = load_data()
-if df is not None and not df.empty:
-    csv = df.to_csv(index=False)
-    st.sidebar.download_button(
-        label="Download Data as CSV",
-        data=csv,
-        file_name="scouting_data.csv",
-        mime="text/csv"
-    )

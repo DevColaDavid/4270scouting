@@ -1,7 +1,7 @@
 # utils/utils.py
+import os
 import pandas as pd
 import streamlit as st
-import os
 from google.cloud import firestore
 from google.oauth2 import service_account
 
@@ -25,44 +25,6 @@ db = initialize_firestore()
 
 # Firestore collection for scouting data
 COLLECTION_NAME = "scouting_data"
-
-DATA_FILE = "scouting_data.csv"
-
-# Define the 2025 Reefscape Point System (Hypothetical)
-POINT_SYSTEM = {
-    'auto': {
-        'coral_l1': 2,
-        'coral_l2': 4,
-        'coral_l3': 6,
-        'coral_l4': 8,
-        'algae_removed': 3,
-        'algae_processor': 5,
-        'algae_barge': 2,
-    },
-    'teleop': {
-        'coral_l1': 1,
-        'coral_l2': 2,
-        'coral_l3': 3,
-        'coral_l4': 4,
-        'algae_removed': 2,
-        'algae_processor': 3,
-        'algae_barge': 1,
-    },
-    'endgame': {
-        'No Climb': 0,
-        'Parked': 5,
-        'Shallow Climb': 10,
-        'Deep Climb': 20,
-    }
-}
-
-def calculate_match_score(row):
-    auto_score = sum(row.get(f'auto_{key}', 0) * value for key, value in POINT_SYSTEM['auto'].items())
-    teleop_score = sum(row.get(f'teleop_{key}', 0) * value for key, value in POINT_SYSTEM['teleop'].items())
-    endgame_score = POINT_SYSTEM['endgame'].get(row.get('climb_status', 'No Climb'), 0)
-    total_score = auto_score + teleop_score + endgame_score
-    return pd.Series([total_score, auto_score, teleop_score, endgame_score], 
-                     index=['total_score', 'auto_score', 'teleop_score', 'endgame_score'])
 
 def load_data():
     try:
@@ -121,12 +83,29 @@ def save_data(match_data):
             st.error("Firestore database not initialized.")
             return False
 
-        # Convert the match_data dictionary to a format suitable for Firestore
-        # Firestore doesn't support NaN, so replace with None
-        match_data = {k: (None if pd.isna(v) else v) for k, v in match_data.items()}
-        
-        # Add the match data as a new document to the scouting_data collection
-        db.collection(COLLECTION_NAME).add(match_data)
+        # Ensure match_data is a dictionary
+        if not isinstance(match_data, dict):
+            st.error(f"Expected match_data to be a dictionary, got {type(match_data)}")
+            return False
+
+        # Convert match_data values to a Firestore-compatible format
+        cleaned_data = {}
+        for k, v in match_data.items():
+            # If v is a Series, convert it to a scalar
+            if isinstance(v, pd.Series):
+                if len(v) == 1:
+                    v = v.iloc[0]  # Extract the single value
+                else:
+                    st.error(f"Value for {k} is a Series with multiple values: {v}")
+                    return False
+            # Handle NaN values
+            if pd.isna(v):
+                cleaned_data[k] = None
+            else:
+                cleaned_data[k] = v
+
+        # Add the cleaned data as a new document to the scouting_data collection
+        db.collection(COLLECTION_NAME).add(cleaned_data)
         return True
     except Exception as e:
         st.error(f"Error saving data to Firestore: {str(e)}")
@@ -151,17 +130,41 @@ def clear_data():
         st.error(f"Error clearing data from Firestore: {str(e)}")
         return False
 
+def calculate_match_score(row):
+    # Auto Score
+    auto_score = (
+        (row['auto_coral_l1'] * 2) +
+        (row['auto_coral_l2'] * 4) +
+        (row['auto_coral_l3'] * 6) +
+        (row['auto_coral_l4'] * 8) +
+        (row['auto_algae_barge'] * 2) +
+        (row['auto_algae_processor'] * 3) +
+        (row['auto_algae_removed'] * 1)
+    )
 
-def validate_team_number(team_number):
-    try:
-        team_num = int(team_number)
-        return 1 <= team_num <= 9999
-    except:
-        return False
+    # Teleop Score
+    teleop_score = (
+        (row['teleop_coral_l1'] * 1) +
+        (row['teleop_coral_l2'] * 2) +
+        (row['teleop_coral_l3'] * 3) +
+        (row['teleop_coral_l4'] * 4) +
+        (row['teleop_algae_barge'] * 1) +
+        (row['teleop_algae_processor'] * 2) +
+        (row['teleop_algae_removed'] * 1)
+    )
 
-def validate_match_number(match_number):
-    try:
-        match_num = int(match_number)
-        return match_num > 0
-    except:
-        return False
+    # Endgame Score
+    endgame_score = 0
+    if row['climb_status'] == 'Shallow Climb':
+        endgame_score = 5
+    elif row['climb_status'] == 'Deep Climb':
+        endgame_score = 10
+
+    total_score = auto_score + teleop_score + endgame_score
+
+    return pd.Series({
+        'auto_score': auto_score,
+        'teleop_score': teleop_score,
+        'endgame_score': endgame_score,
+        'total_score': total_score
+    })
