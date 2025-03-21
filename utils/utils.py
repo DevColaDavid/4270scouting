@@ -60,7 +60,7 @@ def load_data():
             'alliance_color': '',
             'scouter_name': '',
             'starting_position': '',
-            'auto_taxi_left': False,  # New field
+            'auto_taxi_left': False,
             'auto_coral_l1': 0,
             'auto_coral_l2': 0,
             'auto_coral_l3': 0,
@@ -255,3 +255,35 @@ def calculate_match_score(row):
         'endgame_score': endgame_score,
         'total_score': total_score
     })
+
+def calculate_epa(df):
+    """
+    Calculate Expected Points Added (EPA) for each team.
+    EPA = (Actual Alliance Score - Expected Alliance Score) / Number of Teams in Alliance
+    Expected Alliance Score is the average score for that alliance color across all matches.
+    """
+    if 'total_score' not in df.columns or 'alliance_color' not in df.columns or 'match_number' not in df.columns:
+        return df
+
+    # Calculate average score per alliance color
+    avg_scores = df.groupby('alliance_color')['total_score'].mean()
+    red_avg = avg_scores.get('Red', 0)
+    blue_avg = avg_scores.get('Blue', 0)
+
+    # Calculate the number of teams per alliance in each match
+    alliance_counts = df.groupby(['match_number', 'alliance_color'])['team_number'].nunique().reset_index()
+    alliance_counts = alliance_counts.rename(columns={'team_number': 'num_teams'})
+
+    # Merge alliance counts back into the DataFrame
+    df = df.merge(alliance_counts, on=['match_number', 'alliance_color'], how='left')
+
+    # Set expected score based on alliance color
+    df['expected_score'] = df['alliance_color'].map({'Red': red_avg, 'Blue': blue_avg}).fillna(0)
+
+    # Calculate EPA: (Actual Score - Expected Score) / Number of Teams in Alliance
+    df['epa'] = (df['total_score'] - df['expected_score']) / df['num_teams'].replace(0, 1)
+
+    # Drop temporary columns
+    df = df.drop(columns=['num_teams', 'expected_score'], errors='ignore')
+
+    return df

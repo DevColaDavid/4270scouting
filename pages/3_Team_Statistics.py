@@ -61,6 +61,7 @@ else:
 
         # Basic Statistics
         st.markdown("### Basic Statistics")
+        st.markdown("Overview of the team's overall performance across all matches.")
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Total Matches", len(team_data))
@@ -79,6 +80,7 @@ else:
 
         # Autonomous Statistics
         st.markdown("### Autonomous Statistics")
+        st.markdown("Performance metrics for the autonomous period (first 15 seconds of the match).")
         col1, col2, col3 = st.columns(3)
         with col1:
             if 'auto_score' in team_data.columns:
@@ -99,8 +101,89 @@ else:
             else:
                 st.metric("Avg Algae Removed", "N/A")
 
+        # Detailed Autonomous Coral Stats
+        st.markdown("#### Autonomous Coral Scored")
+        st.markdown("Average number of coral scored per match in each level during autonomous.")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if 'auto_coral_l1' in team_data.columns:
+                avg_auto_coral_l1 = team_data['auto_coral_l1'].mean()
+                st.metric("Avg Level 1 Coral", f"{avg_auto_coral_l1:.1f}")
+            else:
+                st.metric("Avg Level 1 Coral", "N/A")
+        with col2:
+            if 'auto_coral_l2' in team_data.columns:
+                avg_auto_coral_l2 = team_data['auto_coral_l2'].mean()
+                st.metric("Avg Level 2 Coral", f"{avg_auto_coral_l2:.1f}")
+            else:
+                st.metric("Avg Level 2 Coral", "N/A")
+        with col3:
+            if 'auto_coral_l3' in team_data.columns:
+                avg_auto_coral_l3 = team_data['auto_coral_l3'].mean()
+                st.metric("Avg Level 3 Coral", f"{avg_auto_coral_l3:.1f}")
+            else:
+                st.metric("Avg Level 3 Coral", "N/A")
+        with col4:
+            if 'auto_coral_l4' in team_data.columns:
+                avg_auto_coral_l4 = team_data['auto_coral_l4'].mean()
+                st.metric("Avg Level 4 Coral", f"{avg_auto_coral_l4:.1f}")
+            else:
+                st.metric("Avg Level 4 Coral", "N/A")
+
+        st.markdown("#### Autonomous Coral Missed")
+        st.markdown("Average number of coral missed per match in each level during autonomous.")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if 'auto_missed_coral_l1' in team_data.columns:
+                avg_auto_missed_l1 = team_data['auto_missed_coral_l1'].mean()
+                st.metric("Avg Missed Level 1", f"{avg_auto_missed_l1:.1f}")
+            else:
+                st.metric("Avg Missed Level 1", "N/A")
+        with col2:
+            if 'auto_missed_coral_l2' in team_data.columns:
+                avg_auto_missed_l2 = team_data['auto_missed_coral_l2'].mean()
+                st.metric("Avg Missed Level 2", f"{avg_auto_missed_l2:.1f}")
+            else:
+                st.metric("Avg Missed Level 2", "N/A")
+        with col3:
+            if 'auto_missed_coral_l3' in team_data.columns:
+                avg_auto_missed_l3 = team_data['auto_missed_coral_l3'].mean()
+                st.metric("Avg Missed Level 3", f"{avg_auto_missed_l3:.1f}")
+            else:
+                st.metric("Avg Missed Level 3", "N/A")
+        with col4:
+            if 'auto_missed_coral_l4' in team_data.columns:
+                avg_auto_missed_l4 = team_data['auto_missed_coral_l4'].mean()
+                st.metric("Avg Missed Level 4", f"{avg_auto_missed_l4:.1f}")
+            else:
+                st.metric("Avg Missed Level 4", "N/A")
+
+        # Detailed Autonomous Algae Stats
+        st.markdown("#### Autonomous Algae Management")
+        st.markdown("Average algae managed per match during autonomous (to barge, processor, and removed).")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if 'auto_algae_barge' in team_data.columns:
+                avg_auto_algae_barge = team_data['auto_algae_barge'].mean()
+                st.metric("Avg Algae to Barge", f"{avg_auto_algae_barge:.1f}")
+            else:
+                st.metric("Avg Algae to Barge", "N/A")
+        with col2:
+            if 'auto_algae_processor' in team_data.columns:
+                avg_auto_algae_processor = team_data['auto_algae_processor'].mean()
+                st.metric("Avg Algae to Processor", f"{avg_auto_algae_processor:.1f}")
+            else:
+                st.metric("Avg Algae to Processor", "N/A")
+        with col3:
+            if 'auto_missed_algae_barge' in team_data.columns and 'auto_missed_algae_processor' in team_data.columns:
+                total_missed_algae = (team_data['auto_missed_algae_barge'] + team_data['auto_missed_algae_processor']).mean()
+                st.metric("Avg Missed Algae", f"{total_missed_algae:.1f}")
+            else:
+                st.metric("Avg Missed Algae", "N/A")
+
         # Teleop Statistics
         st.markdown("### Teleop Statistics")
+        st.markdown("Performance metrics for the teleop period (driver-controlled phase of the match).")
         col1, col2, col3 = st.columns(3)
         with col1:
             if 'teleop_score' in team_data.columns:
@@ -122,8 +205,89 @@ else:
             else:
                 st.metric("Avg Algae Removed", "N/A")
 
+        # Detailed Teleop Coral Stats
+        st.markdown("#### Teleop Coral Scored")
+        st.markdown("Average number of coral scored per match in each level during teleop.")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if 'teleop_coral_l1' in team_data.columns:
+                avg_teleop_coral_l1 = team_data['teleop_coral_l1'].mean()
+                st.metric("Avg Level 1 Coral", f"{avg_teleop_coral_l1:.1f}")
+            else:
+                st.metric("Avg Level 1 Coral", "N/A")
+        with col2:
+            if 'teleop_coral_l2' in team_data.columns:
+                avg_teleop_coral_l2 = team_data['teleop_coral_l2'].mean()
+                st.metric("Avg Level 2 Coral", f"{avg_teleop_coral_l2:.1f}")
+            else:
+                st.metric("Avg Level 2 Coral", "N/A")
+        with col3:
+            if 'teleop_coral_l3' in team_data.columns:
+                avg_teleop_coral_l3 = team_data['teleop_coral_l3'].mean()
+                st.metric("Avg Level 3 Coral", f"{avg_teleop_coral_l3:.1f}")
+            else:
+                st.metric("Avg Level 3 Coral", "N/A")
+        with col4:
+            if 'teleop_coral_l4' in team_data.columns:
+                avg_teleop_coral_l4 = team_data['teleop_coral_l4'].mean()
+                st.metric("Avg Level 4 Coral", f"{avg_teleop_coral_l4:.1f}")
+            else:
+                st.metric("Avg Level 4 Coral", "N/A")
+
+        st.markdown("#### Teleop Coral Missed")
+        st.markdown("Average number of coral missed per match in each level during teleop.")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if 'teleop_missed_coral_l1' in team_data.columns:
+                avg_teleop_missed_l1 = team_data['teleop_missed_coral_l1'].mean()
+                st.metric("Avg Missed Level 1", f"{avg_teleop_missed_l1:.1f}")
+            else:
+                st.metric("Avg Missed Level 1", "N/A")
+        with col2:
+            if 'teleop_missed_coral_l2' in team_data.columns:
+                avg_teleop_missed_l2 = team_data['teleop_missed_coral_l2'].mean()
+                st.metric("Avg Missed Level 2", f"{avg_teleop_missed_l2:.1f}")
+            else:
+                st.metric("Avg Missed Level 2", "N/A")
+        with col3:
+            if 'teleop_missed_coral_l3' in team_data.columns:
+                avg_teleop_missed_l3 = team_data['teleop_missed_coral_l3'].mean()
+                st.metric("Avg Missed Level 3", f"{avg_teleop_missed_l3:.1f}")
+            else:
+                st.metric("Avg Missed Level 3", "N/A")
+        with col4:
+            if 'teleop_missed_coral_l4' in team_data.columns:
+                avg_teleop_missed_l4 = team_data['teleop_missed_coral_l4'].mean()
+                st.metric("Avg Missed Level 4", f"{avg_teleop_missed_l4:.1f}")
+            else:
+                st.metric("Avg Missed Level 4", "N/A")
+
+        # Detailed Teleop Algae Stats
+        st.markdown("#### Teleop Algae Management")
+        st.markdown("Average algae managed per match during teleop (to barge, processor, and removed).")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if 'teleop_algae_barge' in team_data.columns:
+                avg_teleop_algae_barge = team_data['teleop_algae_barge'].mean()
+                st.metric("Avg Algae to Barge", f"{avg_teleop_algae_barge:.1f}")
+            else:
+                st.metric("Avg Algae to Barge", "N/A")
+        with col2:
+            if 'teleop_algae_processor' in team_data.columns:
+                avg_teleop_algae_processor = team_data['teleop_algae_processor'].mean()
+                st.metric("Avg Algae to Processor", f"{avg_teleop_algae_processor:.1f}")
+            else:
+                st.metric("Avg Algae to Processor", "N/A")
+        with col3:
+            if 'teleop_missed_algae_barge' in team_data.columns and 'teleop_missed_algae_processor' in team_data.columns:
+                total_missed_algae = (team_data['teleop_missed_algae_barge'] + team_data['teleop_missed_algae_processor']).mean()
+                st.metric("Avg Missed Algae", f"{total_missed_algae:.1f}")
+            else:
+                st.metric("Avg Missed Algae", "N/A")
+
         # Endgame Statistics
         st.markdown("### Endgame Statistics")
+        st.markdown("Performance metrics for the endgame phase, including parking and climbing.")
         col1, col2, col3 = st.columns(3)
         with col1:
             if 'endgame_score' in team_data.columns:
@@ -147,6 +311,7 @@ else:
         # Climb Status Breakdown
         if 'climb_status' in team_data.columns:
             st.markdown("#### Climb Status Breakdown")
+            st.markdown("Distribution of endgame outcomes (parked, shallow climb, deep climb, or no climb).")
             climb_counts = team_data['climb_status'].value_counts(normalize=True) * 100
             climb_df = pd.DataFrame({
                 'Climb Status': climb_counts.index,
@@ -157,6 +322,7 @@ else:
 
         # Performance Ratings
         st.markdown("### Performance Ratings")
+        st.markdown("Average ratings for defense, speed, and driver skill, as assessed by scouters (0 to 5).")
         col1, col2, col3 = st.columns(3)
         with col1:
             if 'defense_rating' in team_data.columns:
@@ -180,6 +346,7 @@ else:
         # Score Trend Over Matches
         if 'match_number' in team_data.columns and 'total_score' in team_data.columns:
             st.markdown("### Score Trend Over Matches")
+            st.markdown("Trend of the team's total score across matches, showing improvement or decline.")
             trend_data = team_data.sort_values('match_number')
             fig = px.line(trend_data, x='match_number', y='total_score', title='Total Score Trend',
                           labels={'match_number': 'Match Number', 'total_score': 'Total Score'})
@@ -187,6 +354,7 @@ else:
 
         # Qualitative Assessments
         st.markdown("### Qualitative Assessments")
+        st.markdown("Scouter observations and comments for each match.")
         if 'auto_qa' in team_data.columns:
             st.markdown("#### Autonomous Observations")
             for idx, row in team_data.iterrows():
