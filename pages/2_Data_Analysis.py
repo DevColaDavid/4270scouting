@@ -11,8 +11,32 @@ from utils.utils import load_data, calculate_match_score
 @st.cache_data
 def load_and_calculate_scores():
     df = load_data()
-    if not df.empty:
-        df = df.join(df.apply(calculate_match_score, axis=1))
+    if df is not None and not df.empty:
+        # Ensure numeric columns are properly typed
+        numeric_cols = [
+            'match_number', 'team_number',
+            'auto_coral_l1', 'auto_coral_l2', 'auto_coral_l3', 'auto_coral_l4',
+            'auto_missed_coral_l1', 'auto_missed_coral_l2', 'auto_missed_coral_l3', 'auto_missed_coral_l4',
+            'auto_algae_barge', 'auto_algae_processor', 'auto_missed_algae_barge', 'auto_missed_algae_processor', 'auto_algae_removed',
+            'teleop_coral_l1', 'teleop_coral_l2', 'teleop_coral_l3', 'teleop_coral_l4',
+            'teleop_missed_coral_l1', 'teleop_missed_coral_l2', 'teleop_missed_coral_l3', 'teleop_missed_coral_l4',
+            'teleop_algae_barge', 'teleop_algae_processor', 'teleop_missed_algae_barge', 'teleop_missed_algae_processor', 'teleop_algae_removed',
+            'defense_rating', 'speed_rating', 'driver_skill_rating'
+        ]
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+        # Calculate scores if required columns are present
+        required_cols = [
+            'auto_coral_l1', 'auto_coral_l2', 'auto_coral_l3', 'auto_coral_l4',
+            'auto_algae_barge', 'auto_algae_processor', 'auto_algae_removed',
+            'teleop_coral_l1', 'teleop_coral_l2', 'teleop_coral_l3', 'teleop_coral_l4',
+            'teleop_algae_barge', 'teleop_algae_processor', 'teleop_algae_removed',
+            'climb_status'
+        ]
+        if all(col in df.columns for col in required_cols):
+            df = df.join(df.apply(calculate_match_score, axis=1))
     return df
 
 st.title("Overall Data Analysis Dashboard")
@@ -20,42 +44,56 @@ st.title("Overall Data Analysis Dashboard")
 # Load data
 df = load_and_calculate_scores()
 
-if df.empty:
-    st.warning("No scouting data available. Please add match data in the 'Match Scouting' page or check if 'scouting_data.csv' exists.")
+if df is None or df.empty:
+    st.warning("No scouting data available. Please add match data in the 'Match Scouting' page.")
 else:
-    # Sidebar Filters (excluding team filter)
+    # Sidebar Filters
     st.sidebar.header("Filters")
 
     # Match number filter
-    match_numbers = sorted(df['match_number'].unique())
-    selected_matches = st.sidebar.multiselect(
-        "Select Match Numbers",
-        options=match_numbers,
-        default=match_numbers[:5] if len(match_numbers) >= 5 else match_numbers
-    )
+    if 'match_number' in df.columns:
+        match_numbers = sorted(df['match_number'].dropna().unique())
+        selected_matches = st.sidebar.multiselect(
+            "Select Match Numbers",
+            options=match_numbers,
+            default=match_numbers[:5] if len(match_numbers) >= 5 else match_numbers
+        )
+    else:
+        selected_matches = []
+        st.sidebar.warning("Match number data not available.")
 
     # Alliance color filter
-    alliance_colors = sorted(df['alliance_color'].unique())
-    selected_alliances = st.sidebar.multiselect(
-        "Select Alliance Colors",
-        options=alliance_colors,
-        default=alliance_colors
-    )
+    if 'alliance_color' in df.columns:
+        alliance_colors = sorted(df['alliance_color'].dropna().unique())
+        selected_alliances = st.sidebar.multiselect(
+            "Select Alliance Colors",
+            options=alliance_colors,
+            default=alliance_colors
+        )
+    else:
+        selected_alliances = []
+        st.sidebar.warning("Alliance color data not available.")
 
     # Match result filter
-    match_results = sorted(df['match_result'].unique())
-    selected_results = st.sidebar.multiselect(
-        "Select Match Results",
-        options=match_results,
-        default=match_results
-    )
+    if 'match_result' in df.columns:
+        match_results = sorted(df['match_result'].dropna().unique())
+        selected_results = st.sidebar.multiselect(
+            "Select Match Results",
+            options=match_results,
+            default=match_results
+        )
+    else:
+        selected_results = []
+        st.sidebar.warning("Match result data not available.")
 
     # Apply filters
-    filtered_df = df[
-        (df['match_number'].isin(selected_matches)) &
-        (df['alliance_color'].isin(selected_alliances)) &
-        (df['match_result'].isin(selected_results))
-    ]
+    filtered_df = df.copy()
+    if selected_matches:
+        filtered_df = filtered_df[filtered_df['match_number'].isin(selected_matches)]
+    if selected_alliances:
+        filtered_df = filtered_df[filtered_df['alliance_color'].isin(selected_alliances)]
+    if selected_results:
+        filtered_df = filtered_df[filtered_df['match_result'].isin(selected_results)]
 
     if filtered_df.empty:
         st.warning("No data matches the selected filters. Please adjust the filters to include more matches, alliances, or results.")
@@ -68,16 +106,23 @@ else:
         with col2:
             st.metric("Teams Scouted", filtered_df['team_number'].nunique())
         with col3:
-            avg_score = filtered_df['total_score'].mean()
-            st.metric("Avg Total Score", f"{avg_score:.1f}")
+            if 'total_score' in filtered_df.columns:
+                avg_score = filtered_df['total_score'].mean()
+                st.metric("Avg Total Score", f"{avg_score:.1f}")
+            else:
+                st.metric("Avg Total Score", "N/A")
         with col4:
-            most_common_climb = filtered_df['climb_status'].mode()[0] if 'climb_status' in filtered_df.columns else "N/A"
-            st.metric("Most Common Climb", most_common_climb)
+            if 'climb_status' in filtered_df.columns:
+                most_common_climb = filtered_df['climb_status'].mode()[0] if not filtered_df['climb_status'].mode().empty else "N/A"
+                st.metric("Most Common Climb", most_common_climb)
+            else:
+                st.metric("Most Common Climb", "N/A")
 
         # Leaderboard
         st.subheader("Leaderboard")
         st.write("Ranking of Teams Based on Key Metrics Across All Matches")
-        if all(col in filtered_df.columns for col in ['team_number', 'total_score', 'match_result', 'climb_status', 'driver_skill_rating']):
+        required_cols = ['team_number', 'total_score', 'match_result', 'climb_status', 'driver_skill_rating']
+        if all(col in filtered_df.columns for col in required_cols):
             # Calculate metrics for the leaderboard
             leaderboard_data = filtered_df.groupby('team_number').agg({
                 'total_score': 'mean',

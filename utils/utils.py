@@ -4,30 +4,44 @@ import pandas as pd
 import streamlit as st
 from google.cloud import firestore
 from google.oauth2 import service_account
+from datetime import datetime
+import time
+
+# Firestore client (will be initialized lazily)
+db = None
+
+# Firestore collection for scouting data
+COLLECTION_NAME = "scouting_data"
 
 # Initialize Firestore
 def initialize_firestore():
+    global db
+    if db is not None:
+        return None  # Already initialized, no error
+
     try:
         # On Streamlit Community Cloud, use secrets
         if "firebase" in st.secrets:
             creds = service_account.Credentials.from_service_account_info(st.secrets["firebase"])
             db = firestore.Client(credentials=creds, project=st.secrets["firebase"]["project_id"])
+            return None  # Success
         else:
             # Locally, use the JSON key file
+            if not os.path.exists("firestore-key.json"):
+                return "firestore-key.json not found. Please ensure the file exists in the project directory."
             db = firestore.Client.from_service_account_json("firestore-key.json")
-        return db
+            return None  # Success
     except Exception as e:
-        st.error(f"Error initializing Firestore: {str(e)}")
-        return None
-
-# Firestore client
-db = initialize_firestore()
-
-# Firestore collection for scouting data
-COLLECTION_NAME = "scouting_data"
+        return f"Error initializing Firestore: {str(e)}"
 
 def load_data():
     try:
+        # Initialize Firestore if not already initialized
+        error = initialize_firestore()
+        if error:
+            st.error(error)
+            return pd.DataFrame()
+
         if db is None:
             st.error("Firestore database not initialized.")
             return pd.DataFrame()
@@ -40,45 +54,100 @@ def load_data():
             doc_dict["id"] = doc.id  # Include the document ID if needed
             data.append(doc_dict)
 
+        # Define expected columns with default values
+        expected_columns = {
+            'team_number': 0,
+            'match_number': 0,
+            'alliance_color': '',
+            'scouter_name': '',
+            'starting_position': '',
+            'auto_coral_l1': 0,
+            'auto_coral_l2': 0,
+            'auto_coral_l3': 0,
+            'auto_coral_l4': 0,
+            'auto_missed_coral_l1': 0,
+            'auto_missed_coral_l2': 0,
+            'auto_missed_coral_l3': 0,
+            'auto_missed_coral_l4': 0,
+            'auto_algae_barge': 0,
+            'auto_algae_processor': 0,
+            'auto_missed_algae_barge': 0,
+            'auto_missed_algae_processor': 0,
+            'auto_algae_removed': 0,
+            'teleop_coral_l1': 0,
+            'teleop_coral_l2': 0,
+            'teleop_coral_l3': 0,
+            'teleop_coral_l4': 0,
+            'teleop_missed_coral_l1': 0,
+            'teleop_missed_coral_l2': 0,
+            'teleop_missed_coral_l3': 0,
+            'teleop_missed_coral_l4': 0,
+            'teleop_algae_barge': 0,
+            'teleop_algae_processor': 0,
+            'teleop_missed_algae_barge': 0,
+            'teleop_missed_algae_processor': 0,
+            'teleop_algae_removed': 0,
+            'climb_status': 'No Climb',
+            'defense_rating': 0.0,
+            'speed_rating': 0.0,
+            'driver_skill_rating': 0.0,
+            'defense_qa': '',
+            'teleop_qa': '',
+            'auto_qa': '',
+            'comments': '',
+            'match_result': '',
+            'timestamp': ''
+        }
+
         if not data:
-            # Return an empty DataFrame with expected columns if no data exists
-            columns = [
-                'team_number', 'match_number', 'alliance_color', 'scouter_name', 'starting_position',
-                'auto_coral_l1', 'auto_coral_l2', 'auto_coral_l3', 'auto_coral_l4',
-                'auto_missed_coral_l1', 'auto_missed_coral_l2', 'auto_missed_coral_l3', 'auto_missed_coral_l4',
-                'auto_algae_barge', 'auto_algae_processor', 'auto_missed_algae_barge', 'auto_missed_algae_processor', 'auto_algae_removed',
-                'teleop_coral_l1', 'teleop_coral_l2', 'teleop_coral_l3', 'teleop_coral_l4',
-                'teleop_missed_coral_l1', 'teleop_missed_coral_l2', 'teleop_missed_coral_l3', 'teleop_missed_coral_l4',
-                'teleop_algae_barge', 'teleop_algae_processor', 'teleop_missed_algae_barge', 'teleop_missed_algae_processor', 'teleop_algae_removed',
-                'climb_status', 'defense_rating', 'speed_rating', 'driver_skill_rating',
-                'defense_qa', 'teleop_qa', 'auto_qa', 'comments', 'match_result', 'timestamp'
-            ]
-            return pd.DataFrame(columns=columns)
+            # Return an empty DataFrame with all expected columns
+            return pd.DataFrame(columns=list(expected_columns.keys()))
 
         # Convert the list of dictionaries to a DataFrame
         df = pd.DataFrame(data)
-        # Ensure all expected columns are present, fill missing ones with NaN
-        expected_columns = [
-            'team_number', 'match_number', 'alliance_color', 'scouter_name', 'starting_position',
+
+        # Ensure all expected columns are present, fill missing ones with defaults
+        for col, default in expected_columns.items():
+            if col not in df.columns:
+                df[col] = default
+
+        # Convert numeric columns to appropriate types
+        numeric_cols = [
+            'team_number', 'match_number',
             'auto_coral_l1', 'auto_coral_l2', 'auto_coral_l3', 'auto_coral_l4',
             'auto_missed_coral_l1', 'auto_missed_coral_l2', 'auto_missed_coral_l3', 'auto_missed_coral_l4',
             'auto_algae_barge', 'auto_algae_processor', 'auto_missed_algae_barge', 'auto_missed_algae_processor', 'auto_algae_removed',
             'teleop_coral_l1', 'teleop_coral_l2', 'teleop_coral_l3', 'teleop_coral_l4',
             'teleop_missed_coral_l1', 'teleop_missed_coral_l2', 'teleop_missed_coral_l3', 'teleop_missed_coral_l4',
             'teleop_algae_barge', 'teleop_algae_processor', 'teleop_missed_algae_barge', 'teleop_missed_algae_processor', 'teleop_algae_removed',
-            'climb_status', 'defense_rating', 'speed_rating', 'driver_skill_rating',
+            'defense_rating', 'speed_rating', 'driver_skill_rating'
+        ]
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+        # Ensure string columns are strings
+        string_cols = [
+            'alliance_color', 'scouter_name', 'starting_position', 'climb_status',
             'defense_qa', 'teleop_qa', 'auto_qa', 'comments', 'match_result', 'timestamp'
         ]
-        for col in expected_columns:
-            if col not in df.columns:
-                df[col] = pd.NA
-        return df[expected_columns]
+        for col in string_cols:
+            if col in df.columns:
+                df[col] = df[col].astype(str).fillna('')
+
+        return df[list(expected_columns.keys())]
     except Exception as e:
         st.error(f"Error loading data from Firestore: {str(e)}")
         return pd.DataFrame()
 
 def save_data(match_data):
     try:
+        # Initialize Firestore if not already initialized
+        error = initialize_firestore()
+        if error:
+            st.error(error)
+            return False
+
         if db is None:
             st.error("Firestore database not initialized.")
             return False
@@ -104,30 +173,38 @@ def save_data(match_data):
             else:
                 cleaned_data[k] = v
 
-        # Add the cleaned data as a new document to the scouting_data collection
-        db.collection(COLLECTION_NAME).add(cleaned_data)
+        # Add a timestamp if not present
+        if 'timestamp' not in cleaned_data or not cleaned_data['timestamp']:
+            cleaned_data['timestamp'] = datetime.now().isoformat()
+
+        # Ensure team_number and match_number are present and valid
+        if 'team_number' not in cleaned_data or cleaned_data['team_number'] is None:
+            st.error("Team number is missing in match data.")
+            return False
+        if 'match_number' not in cleaned_data or cleaned_data['match_number'] is None:
+            st.error("Match number is missing in match data.")
+            return False
+
+        # Convert team_number and match_number to strings and remove any invalid characters
+        team_number = str(cleaned_data['team_number']).strip()
+        match_number = str(cleaned_data['match_number']).strip()
+
+        # Ensure they are not empty
+        if not team_number or not match_number:
+            st.error("Team number or match number is empty.")
+            return False
+
+        # Create a unique document ID using team_number, match_number, and timestamp
+        # Format: team123_match45_20250321T143022
+        timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+        doc_id = f"team{team_number}_match{match_number}_{timestamp}"
+
+        # Save the data with the custom document ID
+        db.collection(COLLECTION_NAME).document(doc_id).set(cleaned_data)
+        st.success(f"Data saved successfully with document ID: {doc_id}")
         return True
     except Exception as e:
         st.error(f"Error saving data to Firestore: {str(e)}")
-        return False
-
-def clear_data():
-    try:
-        if db is None:
-            st.error("Firestore database not initialized.")
-            return False
-
-        # Get all documents in the scouting_data collection
-        docs = db.collection(COLLECTION_NAME).stream()
-        
-        # Delete each document
-        for doc in docs:
-            doc.reference.delete()
-        
-        st.info("All data cleared successfully from Firestore.")
-        return True
-    except Exception as e:
-        st.error(f"Error clearing data from Firestore: {str(e)}")
         return False
 
 def calculate_match_score(row):
