@@ -56,7 +56,7 @@ def display_recent_matches():
                 'auto_algae_barge', 'auto_algae_processor', 'auto_algae_removed',
                 'teleop_coral_l1', 'teleop_coral_l2', 'teleop_coral_l3', 'teleop_coral_l4',
                 'teleop_algae_barge', 'teleop_algae_processor', 'teleop_algae_removed',
-                'climb_status'
+                'climb_status', 'auto_taxi_left'
             ]
             if all(col in df.columns for col in required_columns):
                 df = df.join(df.apply(calculate_match_score, axis=1))
@@ -75,7 +75,7 @@ def display_recent_matches():
             # Display the 7 most recent responses (not unique matches)
             display_columns = [
                 'match_number', 'team_number', 'scouter_name', 'timestamp',
-                'auto_score', 'teleop_score', 'endgame_score', 'total_score'
+                'auto_taxi_left', 'climb_status', 'auto_score', 'teleop_score', 'endgame_score', 'total_score'
             ]
             available_display_columns = [col for col in display_columns if col in df.columns]
             if available_display_columns:
@@ -99,7 +99,7 @@ def display_quick_stats():
                 'auto_algae_barge', 'auto_algae_processor', 'auto_algae_removed',
                 'teleop_coral_l1', 'teleop_coral_l2', 'teleop_coral_l3', 'teleop_coral_l4',
                 'teleop_algae_barge', 'teleop_algae_processor', 'teleop_algae_removed',
-                'climb_status'
+                'climb_status', 'auto_taxi_left'
             ]
             if all(col in df.columns for col in required_columns):
                 df = df.join(df.apply(calculate_match_score, axis=1))

@@ -35,7 +35,7 @@ else:
         'auto_algae_barge', 'auto_algae_processor', 'auto_algae_removed',
         'teleop_coral_l1', 'teleop_coral_l2', 'teleop_coral_l3', 'teleop_coral_l4',
         'teleop_algae_barge', 'teleop_algae_processor', 'teleop_algae_removed',
-        'climb_status'
+        'climb_status', 'auto_taxi_left'  # Added new field
     ]
     if all(col in df.columns for col in required_cols):
         df = df.join(df.apply(calculate_match_score, axis=1))
@@ -168,6 +168,15 @@ else:
                         insights.append(f"Team {team} contributes with {', '.join(strengths)} (avg score: {avg_score:.1f}).")
                     else:
                         insights.append(f"Team {team} has balanced performance (avg score: {avg_score:.1f}).")
+                    # Add taxiing and parking insights
+                    if 'auto_taxi_left' in team_data.columns:
+                        taxi_rate = team_data['auto_taxi_left'].mean() * 100
+                        insights.append(f"Team {team} successfully taxied in {taxi_rate:.1f}% of matches.")
+                    if 'climb_status' in team_data.columns:
+                        park_rate = (team_data['climb_status'] == 'Parked').mean() * 100
+                        shallow_climb_rate = (team_data['climb_status'] == 'Shallow Climb').mean() * 100
+                        deep_climb_rate = (team_data['climb_status'] == 'Deep Climb').mean() * 100
+                        insights.append(f"Team {team} parked in {park_rate:.1f}% of matches, achieved a shallow climb in {shallow_climb_rate:.1f}%, and a deep climb in {deep_climb_rate:.1f}%.")
                 return insights
 
             red_insights = analyze_team_contributions(red_data, red_team_scores, "Red Alliance")

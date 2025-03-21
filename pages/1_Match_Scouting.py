@@ -33,6 +33,8 @@ st.markdown("*From driver's view*")
 
 # Autonomous Period
 st.subheader("Autonomous Period")
+auto_taxi_left = st.checkbox("Taxi Left Starting Position", help="Check if the robot left its starting position during the first 15 seconds.")
+
 st.markdown("**Coral Scored**")
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -113,7 +115,7 @@ with col2:
 
 # Endgame
 st.subheader("Endgame")
-climb_status = st.selectbox("Climb Status", options=["No Climb", "Shallow Climb", "Deep Climb"])
+climb_status = st.selectbox("Climb Status", options=["No Climb", "Parked", "Shallow Climb", "Deep Climb"])
 
 # Performance Ratings
 st.subheader("Performance Ratings")
@@ -146,6 +148,7 @@ match_data = {
     "alliance_color": alliance_color,
     "scouter_name": scouter_name,
     "starting_position": starting_position,
+    "auto_taxi_left": auto_taxi_left,  # New field
     "auto_coral_l1": auto_coral_l1,
     "auto_coral_l2": auto_coral_l2,
     "auto_coral_l3": auto_coral_l3,

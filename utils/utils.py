@@ -60,6 +60,7 @@ def load_data():
             'alliance_color': '',
             'scouter_name': '',
             'starting_position': '',
+            'auto_taxi_left': False,  # New field
             'auto_coral_l1': 0,
             'auto_coral_l2': 0,
             'auto_coral_l3': 0,
@@ -124,6 +125,12 @@ def load_data():
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+        # Ensure boolean columns are boolean
+        boolean_cols = ['auto_taxi_left']
+        for col in boolean_cols:
+            if col in df.columns:
+                df[col] = df[col].astype(bool)
 
         # Ensure string columns are strings
         string_cols = [
@@ -216,6 +223,9 @@ def calculate_match_score(row):
         (row['auto_algae_processor'] * 3) +
         (row['auto_algae_removed'] * 1)
     )
+    # Add points for taxiing
+    if row['auto_taxi_left']:
+        auto_score += 2  # 2 points for leaving starting position
 
     # Teleop Score
     teleop_score = (
@@ -230,7 +240,9 @@ def calculate_match_score(row):
 
     # Endgame Score
     endgame_score = 0
-    if row['climb_status'] == 'Shallow Climb':
+    if row['climb_status'] == 'Parked':
+        endgame_score = 2  # 2 points for parking
+    elif row['climb_status'] == 'Shallow Climb':
         endgame_score = 5
     elif row['climb_status'] == 'Deep Climb':
         endgame_score = 10
