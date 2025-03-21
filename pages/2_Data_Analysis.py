@@ -7,8 +7,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from utils.utils import load_data, calculate_match_score
 
-# Cache the data loading and score calculation for performance
-@st.cache_data
+st.title("Overall Data Analysis Dashboard")
+
+# Load data (removed caching to ensure fresh data)
 def load_and_calculate_scores():
     df = load_data()
     if df is not None and not df.empty:
@@ -39,9 +40,6 @@ def load_and_calculate_scores():
             df = df.join(df.apply(calculate_match_score, axis=1))
     return df
 
-st.title("Overall Data Analysis Dashboard")
-
-# Load data
 df = load_and_calculate_scores()
 
 if df is None or df.empty:
@@ -126,39 +124,42 @@ else:
             # Calculate metrics for the leaderboard
             leaderboard_data = filtered_df.groupby('team_number').agg({
                 'total_score': 'mean',
-                'match_result': lambda x: (x == 'Win').sum() / len(x) * 100,  # Win rate
-                'climb_status': lambda x: ((x == 'Shallow Climb') | (x == 'Deep Climb')).sum() / len(x) * 100,  # Climb success rate
+                'match_result': lambda x: (x.str.contains('Win', case=False, na=False).sum() / len(x) * 100) if len(x) > 0 else 0,  # Win rate
+                'climb_status': lambda x: (x.isin(['Shallow Climb', 'Deep Climb']).sum() / len(x) * 100) if len(x) > 0 else 0,  # Climb success rate
                 'driver_skill_rating': 'mean'
             }).reset_index()
 
-            # Rename columns for display
-            leaderboard_data.columns = ['Team Number', 'Avg Total Score', 'Win Rate (%)', 'Climb Success Rate (%)', 'Avg Driver Skill Rating']
+            if leaderboard_data.empty:
+                st.info("No teams available to display in the leaderboard.")
+            else:
+                # Rename columns for display
+                leaderboard_data.columns = ['Team Number', 'Avg Total Score', 'Win Rate (%)', 'Climb Success Rate (%)', 'Avg Driver Skill Rating']
 
-            # Round numerical columns
-            leaderboard_data['Avg Total Score'] = leaderboard_data['Avg Total Score'].round(1)
-            leaderboard_data['Win Rate (%)'] = leaderboard_data['Win Rate (%)'].round(1)
-            leaderboard_data['Climb Success Rate (%)'] = leaderboard_data['Climb Success Rate (%)'].round(1)
-            leaderboard_data['Avg Driver Skill Rating'] = leaderboard_data['Avg Driver Skill Rating'].round(3)
+                # Round numerical columns
+                leaderboard_data['Avg Total Score'] = leaderboard_data['Avg Total Score'].round(1)
+                leaderboard_data['Win Rate (%)'] = leaderboard_data['Win Rate (%)'].round(1)
+                leaderboard_data['Climb Success Rate (%)'] = leaderboard_data['Climb Success Rate (%)'].round(1)
+                leaderboard_data['Avg Driver Skill Rating'] = leaderboard_data['Avg Driver Skill Rating'].round(3)
 
-            # Sort by Avg Total Score (descending)
-            leaderboard_data = leaderboard_data.sort_values('Avg Total Score', ascending=False)
+                # Sort by Avg Total Score (descending)
+                leaderboard_data = leaderboard_data.sort_values('Avg Total Score', ascending=False)
 
-            # Display the leaderboard
-            st.dataframe(leaderboard_data)
+                # Display the leaderboard
+                st.dataframe(leaderboard_data)
 
-            # Bar chart for Avg Total Score
-            fig_leaderboard = px.bar(
-                leaderboard_data,
-                x='Team Number',
-                y='Avg Total Score',
-                title="Average Total Score by Team",
-                labels={'Avg Total Score': 'Average Total Score'},
-                color_discrete_sequence=px.colors.qualitative.Plotly
-            )
-            fig_leaderboard.update_traces(
-                hovertemplate="<b>Team %{x}</b><br>Average Total Score: %{y:.1f}"
-            )
-            st.plotly_chart(fig_leaderboard, use_container_width=True, key="leaderboard_bar")
+                # Bar chart for Avg Total Score
+                fig_leaderboard = px.bar(
+                    leaderboard_data,
+                    x='Team Number',
+                    y='Avg Total Score',
+                    title="Average Total Score by Team",
+                    labels={'Avg Total Score': 'Average Total Score'},
+                    color_discrete_sequence=px.colors.qualitative.Plotly
+                )
+                fig_leaderboard.update_traces(
+                    hovertemplate="<b>Team %{x}</b><br>Average Total Score: %{y:.1f}"
+                )
+                st.plotly_chart(fig_leaderboard, use_container_width=True, key="leaderboard_bar")
         else:
             st.warning("Leaderboard data (total_score, match_result, climb_status, driver_skill_rating) not available.")
 
