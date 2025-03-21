@@ -1,3 +1,3 @@
-column_1,column_2,column_3,column_4,column_5,column_6,column_7
-,,,,,,
-,,,,,,
+team_number,match_number,alliance_color,scouter_name,starting_position,auto_coral_l1,auto_coral_l2,auto_coral_l3,auto_coral_l4,auto_missed_coral_l1,auto_missed_coral_l2,auto_missed_coral_l3,auto_missed_coral_l4,auto_algae_barge,auto_algae_processor,auto_missed_algae_barge,auto_missed_algae_processor,auto_algae_removed,teleop_coral_l1,teleop_coral_l2,teleop_coral_l3,teleop_coral_l4,teleop_missed_coral_l1,teleop_missed_coral_l2,teleop_missed_coral_l3,teleop_missed_coral_l4,teleop_algae_barge,teleop_algae_processor,teleop_missed_algae_barge,teleop_missed_algae_processor,teleop_algae_removed,climb_status,defense_rating,speed_rating,driver_skill_rating,defense_qa,teleop_qa,auto_qa,comments,match_result,timestamp
+4270,1,Red,David,Left,2,1,0,0,0,0,0,0,1,1,0,0,1,3,2,1,0,0,0,0,0,2,2,0,0,1,Shallow Climb,3.0,3.5,4.0,Good defense,Stable teleop,Auto was smooth,Great match!,Win,2025-03-20 10:00:00
+1234,1,Blue,Alex,Center,1,0,1,0,0,0,0,0,0,1,0,0,0,2,1,0,0,0,0,0,0,1,1,0,0,0,No Climb,2.5,3.0,3.0,Weak defense,Struggled in teleop,Auto missed some,Needs improvement,Loss,2025-03-20 10:00:00
