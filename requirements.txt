@@ -6,3 +6,4 @@ matplotlib
 google-cloud-firestore
 google-auth
 streamlit-autorefresh
+pytz

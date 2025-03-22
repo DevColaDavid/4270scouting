@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.form_config import MATCH_INFO, AUTONOMOUS, TELEOP, ENDGAME, PERFORMANCE_RATINGS, ANALYSIS
+from utils.form_config import MATCH_INFO, AUTONOMOUS, TELEOP, ENDGAME, PERFORMANCE_RATINGS, ANALYSIS, MATCH_OUTCOME, STRATEGY
 from utils.utils import save_data
 
 st.set_page_config(page_title="Match Scouting", page_icon="📝", layout="wide")
@@ -47,12 +47,12 @@ if 'form_cleared' not in st.session_state:
 # Function to get the current value of a field, considering form clearing
 def get_field_value(name, default_value):
     if st.session_state.form_cleared:
-        # Special case for team_number, match_number, alliance_color, starting_position, match_outcome: default to None
-        if name in ["team_number", "match_number", "alliance_color", "starting_position", "match_outcome"]:
+        # Special case for team_number, match_number, alliance_color, starting_position, match_outcome, primary_role: default to None
+        if name in ["team_number", "match_number", "alliance_color", "starting_position", "match_outcome", "primary_role"]:
             return None
         return default_value
-    # Special case for team_number, match_number, alliance_color, starting_position, match_outcome: default to None if not set
-    if name in ["team_number", "match_number", "alliance_color", "starting_position", "match_outcome"] and name not in st.session_state.form_data:
+    # Special case for team_number, match_number, alliance_color, starting_position, match_outcome, primary_role: default to None if not set
+    if name in ["team_number", "match_number", "alliance_color", "starting_position", "match_outcome", "primary_role"] and name not in st.session_state.form_data:
         return None
     return st.session_state.form_data.get(name, default_value)
 
@@ -134,32 +134,6 @@ with col3:
             key=name,
             value=get_field_value(name, "")
         )
-
-    # Match Outcome
-    for item in MATCH_INFO['basic_info'][4:5]:  # Match Outcome (index 4)
-        name = item['name']
-        options = item['options']
-        current_value = get_field_value(name, None)
-        # Add None as a valid option for the selectbox
-        display_options = [None] + options
-        # Format function to display "Choose an option" when value is None
-        def format_option(value):
-            if value is None:
-                return "Choose an option"
-            return value
-        # If current_value is None, index should be 0 (None); otherwise, adjust for the None option
-        if current_value is None:
-            index = 0
-        else:
-            index = options.index(current_value) + 1  # +1 because None is at index 0
-        selected_value = st.selectbox(
-            item['label'],
-            options=display_options,
-            index=index,
-            key=name,
-            format_func=format_option
-        )
-        form_data[name] = selected_value if selected_value is not None else None
 
 # Autonomous Section
 st.subheader("Autonomous Period")
@@ -340,6 +314,40 @@ for idx, rating_item in enumerate(PERFORMANCE_RATINGS['ratings']):
             key=name
         )
 
+# Strategy Section (Primary Role)
+st.subheader("Strategy")
+col1, col2, col3 = st.columns([1, 2, 2])
+with col1:
+    item = STRATEGY['primary_role']
+    name = item['name']
+    options = item['options']
+    current_value = get_field_value(name, None)
+    # Add None as a valid option for the selectbox
+    display_options = [None] + options
+    # Format function to display "Choose an option" when value is None
+    def format_option(value):
+        if value is None:
+            return "Choose an option"
+        return value
+    # If current_value is None, index should be 0 (None); otherwise, adjust for the None option
+    if current_value is None:
+        index = 0
+    else:
+        index = options.index(current_value) + 1  # +1 because None is at index 0
+    selected_value = st.selectbox(
+        item['label'],
+        options=display_options,
+        index=index,
+        key=name,
+        format_func=format_option,
+        help=item.get('help', '')
+    )
+    form_data[name] = selected_value if selected_value is not None else None
+with col2:
+    pass  # Empty column for spacing
+with col3:
+    pass  # Empty column for spacing
+
 # Analysis Section
 st.subheader("Qualitative Analysis")
 col1, col2 = st.columns(2)
@@ -352,6 +360,40 @@ for idx, question_item in enumerate(ANALYSIS['questions']):
             key=name,
             value=get_field_value(name, "")
         )
+
+# Match Outcome Section
+st.subheader("Match Outcome")
+col1, col2, col3 = st.columns([1, 2, 2])
+with col1:
+    item = MATCH_OUTCOME['outcome']
+    name = item['name']
+    options = item['options']
+    current_value = get_field_value(name, None)
+    # Add None as a valid option for the selectbox
+    display_options = [None] + options
+    # Format function to display "Choose an option" when value is None
+    def format_option(value):
+        if value is None:
+            return "Choose an option"
+        return value
+    # If current_value is None, index should be 0 (None); otherwise, adjust for the None option
+    if current_value is None:
+        index = 0
+    else:
+        index = options.index(current_value) + 1  # +1 because None is at index 0
+    selected_value = st.selectbox(
+        item['label'],
+        options=display_options,
+        index=index,
+        key=name,
+        format_func=format_option,
+        help=item.get('help', '')
+    )
+    form_data[name] = selected_value if selected_value is not None else None
+with col2:
+    pass  # Empty column for spacing
+with col3:
+    pass  # Empty column for spacing
 
 # Submit and Clear buttons
 col1, col2 = st.columns(2)
@@ -378,6 +420,8 @@ if submit_button:
         st.error("Please select a starting position.")
     elif not form_data.get("match_outcome"):
         st.error("Please select the match outcome.")
+    elif not form_data.get("primary_role"):
+        st.error("Please select the team's primary role.")
     else:
         # Save data to Firestore
         success, doc_id = save_data(form_data)

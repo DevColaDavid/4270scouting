@@ -174,3 +174,4 @@ cython_debug/
 .pypirc
 firestore-key.json
 scouting_data.csv
+.streamlit/secrets.toml

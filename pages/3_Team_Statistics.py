@@ -1,3 +1,4 @@
+# app/3_Team_Statistics.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -83,7 +84,7 @@ else:
     st.warning("Cannot calculate match scores. Missing required columns.")
     st.stop()
 
-# Calculate success ratios
+# Calculate success ratios and additional metrics
 df['auto_coral_success'] = df['auto_coral_l1'] + df['auto_coral_l2'] + df['auto_coral_l3'] + df['auto_coral_l4']
 df['auto_coral_missed'] = df['auto_missed_coral_l1'] + df['auto_missed_coral_l2'] + df['auto_missed_coral_l3'] + df['auto_missed_coral_l4']
 df['teleop_coral_success'] = df['teleop_coral_l1'] + df['teleop_coral_l2'] + df['teleop_coral_l3'] + df['teleop_coral_l4']
@@ -196,18 +197,37 @@ if team_data.empty:
     st.info(f"No data available for team {selected_team}.")
     st.stop()
 
-# Calculate team statistics
+# Calculate team statistics with additional metrics
 team_stats = team_data.groupby('team_number').agg({
     'total_score': 'mean',
     'auto_score': 'mean',
     'teleop_score': 'mean',
     'endgame_score': 'mean',
+    'auto_coral_success': 'mean',
+    'auto_coral_missed': 'mean',
+    'teleop_coral_success': 'mean',
+    'teleop_coral_missed': 'mean',
+    'auto_algae_processor': 'mean',
+    'teleop_algae_processor': 'mean',
+    'auto_algae_barge': 'mean',
+    'teleop_algae_barge': 'mean',
+    'auto_missed_algae_barge': 'mean',
+    'teleop_missed_algae_barge': 'mean',
+    'auto_algae_removed': 'mean',
+    'teleop_algae_removed': 'mean',
     'auto_coral_success_ratio': 'mean',
     'teleop_coral_success_ratio': 'mean',
     'auto_algae_success_ratio': 'mean',
     'teleop_algae_success_ratio': 'mean',
-    'climb_status': lambda x: ((x == 'Shallow Climb') | (x == 'Deep Climb')).mean() * 100
 }).reset_index()
+
+# Calculate climb statistics
+climb_stats = team_data.groupby('team_number')['climb_status'].value_counts(normalize=True).unstack(fill_value=0) * 100
+climb_stats = climb_stats.reset_index()
+# Ensure all possible climb statuses are present
+for status in ['Shallow Climb', 'Deep Climb', 'No Climb']:
+    if status not in climb_stats.columns:
+        climb_stats[status] = 0
 
 # Calculate win/loss/tie record using the final match outcome
 win_loss = team_data.groupby('team_number')['match_outcome_final'].value_counts().unstack(fill_value=0).reset_index()
@@ -219,10 +239,22 @@ if 'Losses' not in win_loss.columns:
 if 'Ties' not in win_loss.columns:
     win_loss['Ties'] = 0
 
+# Calculate primary role distribution
+if 'primary_role' in team_data.columns:
+    role_distribution = team_data.groupby('team_number')['primary_role'].value_counts(normalize=True).unstack(fill_value=0) * 100
+    role_distribution = role_distribution.reset_index()
+    # Ensure all possible roles are present
+    for role in ['Offense', 'Defense', 'Both', 'Neither']:
+        if role not in role_distribution.columns:
+            role_distribution[role] = 0
+else:
+    role_distribution = pd.DataFrame({'team_number': [selected_team], 'Offense': [0], 'Defense': [0], 'Both': [0], 'Neither': [0]})
+
 # Display team statistics
 st.subheader(f"Statistics for Team {selected_team}")
 
-col1, col2 = st.columns(2)
+# Organize into sections using columns
+col1, col2, col3 = st.columns(3)
 
 with col1:
     st.markdown("### Scoring Statistics")
@@ -231,19 +263,44 @@ with col1:
     st.markdown(f"- **Average Teleop Score:** {team_stats['teleop_score'].iloc[0]:.2f}")
     st.markdown(f"- **Average Endgame Score:** {team_stats['endgame_score'].iloc[0]:.2f}")
 
+    st.markdown("### Win/Loss Record")
+    st.markdown(f"- **Wins:** {win_loss['Wins'].iloc[0]}")
+    st.markdown(f"- **Losses:** {win_loss['Losses'].iloc[0]}")
+    st.markdown(f"- **Ties:** {win_loss['Ties'].iloc[0]}")
+
 with col2:
-    st.markdown("### Success Ratios")
+    st.markdown("### Coral Statistics")
+    st.markdown(f"- **Auto Coral Scored:** {team_stats['auto_coral_success'].iloc[0]:.1f}")
+    st.markdown(f"- **Auto Coral Missed:** {team_stats['auto_coral_missed'].iloc[0]:.1f}")
     st.markdown(f"- **Auto Coral Success Ratio:** {team_stats['auto_coral_success_ratio'].iloc[0]*100:.1f}%")
+    st.markdown(f"- **Teleop Coral Scored:** {team_stats['teleop_coral_success'].iloc[0]:.1f}")
+    st.markdown(f"- **Teleop Coral Missed:** {team_stats['teleop_coral_missed'].iloc[0]:.1f}")
     st.markdown(f"- **Teleop Coral Success Ratio:** {team_stats['teleop_coral_success_ratio'].iloc[0]*100:.1f}%")
+
+    st.markdown("### Climb Statistics")
+    st.markdown(f"- **Shallow Climb Rate:** {climb_stats['Shallow Climb'].iloc[0]:.1f}%")
+    st.markdown(f"- **Deep Climb Rate:** {climb_stats['Deep Climb'].iloc[0]:.1f}%")
+    st.markdown(f"- **No Climb Rate:** {climb_stats['No Climb'].iloc[0]:.1f}%")
+
+with col3:
+    st.markdown("### Algae Statistics")
+    st.markdown(f"- **Auto Algae in Processor:** {team_stats['auto_algae_processor'].iloc[0]:.1f}")
+    st.markdown(f"- **Teleop Algae in Processor:** {team_stats['teleop_algae_processor'].iloc[0]:.1f}")
+    st.markdown(f"- **Auto Algae in Barge:** {team_stats['auto_algae_barge'].iloc[0]:.1f}")
+    st.markdown(f"- **Auto Algae Barge Missed:** {team_stats['auto_missed_algae_barge'].iloc[0]:.1f}")
+    st.markdown(f"- **Teleop Algae in Barge:** {team_stats['teleop_algae_barge'].iloc[0]:.1f}")
+    st.markdown(f"- **Teleop Algae Barge Missed:** {team_stats['teleop_missed_algae_barge'].iloc[0]:.1f}")
+    st.markdown(f"- **Auto Algae Removed from Reef:** {team_stats['auto_algae_removed'].iloc[0]:.1f}")
+    st.markdown(f"- **Teleop Algae Removed from Reef:** {team_stats['teleop_algae_removed'].iloc[0]:.1f}")
     st.markdown(f"- **Auto Algae Success Ratio:** {team_stats['auto_algae_success_ratio'].iloc[0]*100:.1f}%")
     st.markdown(f"- **Teleop Algae Success Ratio:** {team_stats['teleop_algae_success_ratio'].iloc[0]*100:.1f}%")
-    st.markdown(f"- **Climb Success Rate:** {team_stats['climb_status'].iloc[0]:.1f}%")
 
-# Display win/loss record
-st.markdown("### Win/Loss Record")
-st.markdown(f"- **Wins:** {win_loss['Wins'].iloc[0]}")
-st.markdown(f"- **Losses:** {win_loss['Losses'].iloc[0]}")
-st.markdown(f"- **Ties:** {win_loss['Ties'].iloc[0]}")
+# Display strategy distribution
+st.markdown("### Strategy Distribution")
+st.markdown(f"- **Offense:** {role_distribution['Offense'].iloc[0]:.1f}%")
+st.markdown(f"- **Defense:** {role_distribution['Defense'].iloc[0]:.1f}%")
+st.markdown(f"- **Both:** {role_distribution['Both'].iloc[0]:.1f}%")
+st.markdown(f"- **Neither:** {role_distribution['Neither'].iloc[0]:.1f}%")
 
 # Plot performance over matches
 st.subheader("Performance Over Matches")

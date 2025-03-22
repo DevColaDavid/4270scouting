@@ -5,8 +5,6 @@ MATCH_INFO = {
         {'name': 'match_number', 'label': 'Match Number', 'type': 'number'},
         {'name': 'alliance_color', 'label': 'Alliance', 'type': 'select', 'options': ['Red', 'Blue']},
         {'name': 'scouter_name', 'label': 'Scouter Name', 'type': 'text'},
-        # Add the new field for match outcome
-        {'name': 'match_outcome', 'label': 'Match Outcome', 'type': 'select', 'options': ['Won', 'Lost', 'Tie']}
     ],
     'starting_position': {
         'name': 'starting_position',
@@ -16,7 +14,16 @@ MATCH_INFO = {
     }
 }
 
-# The rest of the file (AUTONOMOUS, TELEOP, ENDGAME, PERFORMANCE_RATINGS, ANALYSIS) remains unchanged
+MATCH_OUTCOME = {
+    'outcome': {
+        'name': 'match_outcome',
+        'label': 'Match Outcome',
+        'type': 'select',
+        'options': ['Won', 'Lost', 'Tie'],
+        'help': "Select the outcome from this team's perspective: Won (their alliance won), Lost (opposing alliance won), or Tie (scores equal)."
+    }
+}
+
 AUTONOMOUS = {
     'mobility': [
         {'name': 'auto_taxi_left', 'label': 'Taxi Auto Off the Starting Line', 'type': 'checkbox'}
@@ -79,6 +86,17 @@ PERFORMANCE_RATINGS = {
         {'name': 'speed_rating', 'label': 'Speed Rating', 'type': 'slider', 'min': 1, 'max': 5},
         {'name': 'driver_skill_rating', 'label': 'Driver Skill Rating', 'type': 'slider', 'min': 1, 'max': 5}
     ]
+}
+
+# New section for Strategy (Primary Role)
+STRATEGY = {
+    'primary_role': {
+        'name': 'primary_role',
+        'label': 'Primary Role',
+        'type': 'select',
+        'options': ['Offense', 'Defense', 'Both', 'Neither'],
+        'help': "Select the team's primary role during the match: Offense (focused on scoring), Defense (focused on blocking opponents), Both (balanced), or Neither (minimal activity)."
+    }
 }
 
 ANALYSIS = {
