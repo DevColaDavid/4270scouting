@@ -436,10 +436,49 @@ st.plotly_chart(fig, use_container_width=True)
 # Raw Data
 st.subheader("Raw Data")
 st.markdown("Complete dataset for all matches, including all collected metrics. Use the table below to view and download the data.")
-st.dataframe(df, use_container_width=True)
+
+# Define the desired column order based on the Match Scouting form
+desired_column_order = [
+    # MATCH_INFO
+    'team_number', 'match_number', 'alliance_color', 'scouter_name', 'starting_position',
+    # MATCH_OUTCOME
+    'match_outcome',
+    # AUTONOMOUS
+    'auto_taxi_left',
+    'auto_coral_l1', 'auto_coral_l2', 'auto_coral_l3', 'auto_coral_l4',
+    'auto_missed_coral_l1', 'auto_missed_coral_l2', 'auto_missed_coral_l3', 'auto_missed_coral_l4',
+    'auto_algae_barge', 'auto_algae_processor', 'auto_missed_algae_barge', 'auto_missed_algae_processor', 'auto_algae_removed',
+    # TELEOP
+    'teleop_coral_l1', 'teleop_coral_l2', 'teleop_coral_l3', 'teleop_coral_l4',
+    'teleop_missed_coral_l1', 'teleop_missed_coral_l2', 'teleop_missed_coral_l3', 'teleop_missed_coral_l4',
+    'teleop_algae_barge', 'teleop_algae_processor', 'teleop_missed_algae_barge', 'teleop_missed_algae_processor', 'teleop_algae_removed',
+    # ENDGAME
+    'climb_status',
+    # PERFORMANCE_RATINGS
+    'defense_rating', 'speed_rating', 'driver_skill_rating',
+    # STRATEGY
+    'primary_role',
+    # ANALYSIS
+    'defense_qa', 'teleop_qa', 'auto_qa', 'comments'
+]
+
+# Filter the desired columns that exist in the DataFrame
+available_columns = [col for col in desired_column_order if col in df.columns]
+
+# Get any additional columns (e.g., calculated fields like total_score, epa, etc.)
+additional_columns = [col for col in df.columns if col not in desired_column_order]
+
+# Combine the columns: desired order first, then additional columns
+final_column_order = available_columns + additional_columns
+
+# Reorder the DataFrame
+df_reordered = df[final_column_order]
+
+# Display the reordered DataFrame
+st.dataframe(df_reordered, use_container_width=True)
 
 # Download button for raw data
-csv = df.to_csv(index=False)
+csv = df_reordered.to_csv(index=False)
 st.download_button(
     label="Download Raw Data as CSV",
     data=csv,
