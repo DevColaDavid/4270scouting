@@ -207,12 +207,30 @@ team_stats = team_data.groupby('team_number').agg({
     'auto_coral_missed': 'mean',
     'teleop_coral_success': 'mean',
     'teleop_coral_missed': 'mean',
+    'auto_coral_l1': 'mean',
+    'auto_coral_l2': 'mean',
+    'auto_coral_l3': 'mean',
+    'auto_coral_l4': 'mean',
+    'teleop_coral_l1': 'mean',
+    'teleop_coral_l2': 'mean',
+    'teleop_coral_l3': 'mean',
+    'teleop_coral_l4': 'mean',
+    'auto_missed_coral_l1': 'mean',
+    'auto_missed_coral_l2': 'mean',
+    'auto_missed_coral_l3': 'mean',
+    "auto_missed_coral_l4": 'mean',
+    'teleop_missed_coral_l1': 'mean',
+    'teleop_missed_coral_l2': 'mean',
+    'teleop_missed_coral_l3': 'mean',
+    'teleop_missed_coral_l4': 'mean',
     'auto_algae_processor': 'mean',
     'teleop_algae_processor': 'mean',
     'auto_algae_barge': 'mean',
     'teleop_algae_barge': 'mean',
     'auto_missed_algae_barge': 'mean',
     'teleop_missed_algae_barge': 'mean',
+    'auto_missed_algae_processor': 'mean',
+    'teleop_missed_algae_processor': 'mean',
     'auto_algae_removed': 'mean',
     'teleop_algae_removed': 'mean',
     'auto_coral_success_ratio': 'mean',
@@ -220,6 +238,22 @@ team_stats = team_data.groupby('team_number').agg({
     'auto_algae_success_ratio': 'mean',
     'teleop_algae_success_ratio': 'mean',
 }).reset_index()
+
+# Calculate total objects scored (coral + algae)
+team_stats['total_auto_objects_scored'] = (
+    team_stats['auto_coral_success'] +
+    team_stats['auto_algae_barge'] +
+    team_stats['auto_algae_processor']
+)
+team_stats['total_teleop_objects_scored'] = (
+    team_stats['teleop_coral_success'] +
+    team_stats['teleop_algae_barge'] +
+    team_stats['teleop_algae_processor']
+)
+team_stats['total_objects_scored'] = (
+    team_stats['total_auto_objects_scored'] +
+    team_stats['total_teleop_objects_scored']
+)
 
 # Calculate climb statistics
 climb_stats = team_data.groupby('team_number')['climb_status'].value_counts(normalize=True).unstack(fill_value=0) * 100
@@ -262,6 +296,9 @@ with col1:
     st.markdown(f"- **Average Auto Score:** {team_stats['auto_score'].iloc[0]:.2f}")
     st.markdown(f"- **Average Teleop Score:** {team_stats['teleop_score'].iloc[0]:.2f}")
     st.markdown(f"- **Average Endgame Score:** {team_stats['endgame_score'].iloc[0]:.2f}")
+    st.markdown(f"- **Avg Total Objects Scored:** {team_stats['total_objects_scored'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Auto Objects Scored:** {team_stats['total_auto_objects_scored'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Teleop Objects Scored:** {team_stats['total_teleop_objects_scored'].iloc[0]:.1f}")
 
     st.markdown("### Win/Loss Record")
     st.markdown(f"- **Wins:** {win_loss['Wins'].iloc[0]}")
@@ -270,37 +307,81 @@ with col1:
 
 with col2:
     st.markdown("### Coral Statistics")
-    st.markdown(f"- **Auto Coral Scored:** {team_stats['auto_coral_success'].iloc[0]:.1f}")
-    st.markdown(f"- **Auto Coral Missed:** {team_stats['auto_coral_missed'].iloc[0]:.1f}")
+    st.markdown("#### Autonomous Coral")
+    st.markdown(f"- **Avg Scored on L1:** {team_stats['auto_coral_l1'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Missed on L1:** {team_stats['auto_missed_coral_l1'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Scored on L2:** {team_stats['auto_coral_l2'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Missed on L2:** {team_stats['auto_missed_coral_l2'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Scored on L3:** {team_stats['auto_coral_l3'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Missed on L3:** {team_stats['auto_missed_coral_l3'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Scored on L4:** {team_stats['auto_coral_l4'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Missed on L4:** {team_stats['auto_missed_coral_l4'].iloc[0]:.1f}")
+    st.markdown(f"- **Total Auto Coral Scored:** {team_stats['auto_coral_success'].iloc[0]:.1f}")
+    st.markdown(f"- **Total Auto Coral Missed:** {team_stats['auto_coral_missed'].iloc[0]:.1f}")
     st.markdown(f"- **Auto Coral Success Ratio:** {team_stats['auto_coral_success_ratio'].iloc[0]*100:.1f}%")
-    st.markdown(f"- **Teleop Coral Scored:** {team_stats['teleop_coral_success'].iloc[0]:.1f}")
-    st.markdown(f"- **Teleop Coral Missed:** {team_stats['teleop_coral_missed'].iloc[0]:.1f}")
-    st.markdown(f"- **Teleop Coral Success Ratio:** {team_stats['teleop_coral_success_ratio'].iloc[0]*100:.1f}%")
 
-    st.markdown("### Climb Statistics")
-    st.markdown(f"- **Shallow Climb Rate:** {climb_stats['Shallow Climb'].iloc[0]:.1f}%")
-    st.markdown(f"- **Deep Climb Rate:** {climb_stats['Deep Climb'].iloc[0]:.1f}%")
-    st.markdown(f"- **No Climb Rate:** {climb_stats['No Climb'].iloc[0]:.1f}%")
+    st.markdown("#### Teleop Coral")
+    st.markdown(f"- **Avg Scored on L1:** {team_stats['teleop_coral_l1'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Missed on L1:** {team_stats['teleop_missed_coral_l1'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Scored on L2:** {team_stats['teleop_coral_l2'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Missed on L2:** {team_stats['teleop_missed_coral_l2'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Scored on L3:** {team_stats['teleop_coral_l3'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Missed on L3:** {team_stats['teleop_missed_coral_l3'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Scored on L4:** {team_stats['teleop_coral_l4'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Missed on L4:** {team_stats['teleop_missed_coral_l4'].iloc[0]:.1f}")
+    st.markdown(f"- **Total Teleop Coral Scored:** {team_stats['teleop_coral_success'].iloc[0]:.1f}")
+    st.markdown(f"- **Total Teleop Coral Missed:** {team_stats['teleop_coral_missed'].iloc[0]:.1f}")
+    st.markdown(f"- **Teleop Coral Success Ratio:** {team_stats['teleop_coral_success_ratio'].iloc[0]*100:.1f}%")
 
 with col3:
     st.markdown("### Algae Statistics")
-    st.markdown(f"- **Auto Algae in Processor:** {team_stats['auto_algae_processor'].iloc[0]:.1f}")
-    st.markdown(f"- **Teleop Algae in Processor:** {team_stats['teleop_algae_processor'].iloc[0]:.1f}")
-    st.markdown(f"- **Auto Algae in Barge:** {team_stats['auto_algae_barge'].iloc[0]:.1f}")
-    st.markdown(f"- **Auto Algae Barge Missed:** {team_stats['auto_missed_algae_barge'].iloc[0]:.1f}")
-    st.markdown(f"- **Teleop Algae in Barge:** {team_stats['teleop_algae_barge'].iloc[0]:.1f}")
-    st.markdown(f"- **Teleop Algae Barge Missed:** {team_stats['teleop_missed_algae_barge'].iloc[0]:.1f}")
-    st.markdown(f"- **Auto Algae Removed from Reef:** {team_stats['auto_algae_removed'].iloc[0]:.1f}")
-    st.markdown(f"- **Teleop Algae Removed from Reef:** {team_stats['teleop_algae_removed'].iloc[0]:.1f}")
+    st.markdown("#### Autonomous Algae")
+    st.markdown(f"- **Avg Scored in Processor:** {team_stats['auto_algae_processor'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Missed in Processor:** {team_stats['auto_missed_algae_processor'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Scored in Barge:** {team_stats['auto_algae_barge'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Missed in Barge:** {team_stats['auto_missed_algae_barge'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Removed from Reef:** {team_stats['auto_algae_removed'].iloc[0]:.1f}")
     st.markdown(f"- **Auto Algae Success Ratio:** {team_stats['auto_algae_success_ratio'].iloc[0]*100:.1f}%")
+
+    st.markdown("#### Teleop Algae")
+    st.markdown(f"- **Avg Scored in Processor:** {team_stats['teleop_algae_processor'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Missed in Processor:** {team_stats['teleop_missed_algae_processor'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Scored in Barge:** {team_stats['teleop_algae_barge'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Missed in Barge:** {team_stats['teleop_missed_algae_barge'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Removed from Reef:** {team_stats['teleop_algae_removed'].iloc[0]:.1f}")
     st.markdown(f"- **Teleop Algae Success Ratio:** {team_stats['teleop_algae_success_ratio'].iloc[0]*100:.1f}%")
 
-# Display strategy distribution
-st.markdown("### Strategy Distribution")
-st.markdown(f"- **Offense:** {role_distribution['Offense'].iloc[0]:.1f}%")
-st.markdown(f"- **Defense:** {role_distribution['Defense'].iloc[0]:.1f}%")
-st.markdown(f"- **Both:** {role_distribution['Both'].iloc[0]:.1f}%")
-st.markdown(f"- **Neither:** {role_distribution['Neither'].iloc[0]:.1f}%")
+# Display climb and strategy distribution as pie charts
+st.subheader("Climb and Strategy Distribution")
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("#### Climb Distribution")
+    climb_data = climb_stats.melt(id_vars=['team_number'], value_vars=['Shallow Climb', 'Deep Climb', 'No Climb'],
+                                  var_name='Climb Status', value_name='Percentage')
+    fig_climb = px.pie(
+        climb_data,
+        names='Climb Status',
+        values='Percentage',
+        title=f"Team {selected_team} Climb Distribution",
+        hole=0.3
+    )
+    fig_climb.update_traces(textinfo='percent+label')
+    st.plotly_chart(fig_climb, use_container_width=True)
+
+with col2:
+    st.markdown("#### Strategy Distribution")
+    role_data = role_distribution.melt(id_vars=['team_number'], value_vars=['Offense', 'Defense', 'Both', 'Neither'],
+                                       var_name='Primary Role', value_name='Percentage')
+    fig_role = px.pie(
+        role_data,
+        names='Primary Role',
+        values='Percentage',
+        title=f"Team {selected_team} Strategy Distribution",
+        hole=0.3
+    )
+    fig_role.update_traces(textinfo='percent+label')
+    st.plotly_chart(fig_role, use_container_width=True)
 
 # Plot performance over matches
 st.subheader("Performance Over Matches")

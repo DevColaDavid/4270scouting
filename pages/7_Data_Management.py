@@ -125,23 +125,24 @@ def archive_match_data(doc_ids):
     except Exception as e:
         st.error(f"Error archiving records: {e}")
 
-# Function to unarchive a match record (move from archived_scouting_data back to scouting_data)
-def unarchive_match_data(doc_id):
+# Function to unarchive match records (move from archived_scouting_data back to scouting_data)
+def unarchive_match_data(doc_ids):
     try:
-        # Get the document from the archived collection
-        doc_ref = db.collection('archived_scouting_data').document(doc_id)
-        doc = doc_ref.get()
-        if doc.exists:
-            doc_data = doc.to_dict()
-            # Move back to the scouting_data collection
-            db.collection('scouting_data').document(doc_id).set(doc_data)
-            # Delete from the archived collection
-            doc_ref.delete()
-            st.success(f"Successfully unarchived record {doc_id}.")
-        else:
-            st.error(f"Archived record {doc_id} not found.")
+        for doc_id in doc_ids:
+            # Get the document from the archived collection
+            doc_ref = db.collection('archived_scouting_data').document(doc_id)
+            doc = doc_ref.get()
+            if doc.exists:
+                doc_data = doc.to_dict()
+                # Move back to the scouting_data collection
+                db.collection('scouting_data').document(doc_id).set(doc_data)
+                # Delete from the archived collection
+                doc_ref.delete()
+                st.success(f"Successfully unarchived record {doc_id}.")
+            else:
+                st.error(f"Archived record {doc_id} not found.")
     except Exception as e:
-        st.error(f"Error unarchiving record {doc_id}: {e}")
+        st.error(f"Error unarchiving records: {e}")
 
 # Function to upload a new match record to Firestore
 def upload_match_data(new_data):
@@ -169,6 +170,16 @@ with tabs[0]:
         # Sort columns for better readability (optional)
         display_columns = sorted(display_columns)
         st.dataframe(match_data[display_columns], use_container_width=True)
+
+        # Add a download button for the data as CSV
+        csv = match_data[display_columns].to_csv(index=False)
+        st.download_button(
+            label="Download Data as CSV",
+            data=csv,
+            file_name="match_data.csv",
+            mime="text/csv",
+            key="download_csv"
+        )
     else:
         st.info("No match data available.")
 
@@ -437,9 +448,12 @@ with tabs[5]:
     archived_data = fetch_archived_match_data()
     if not archived_data.empty:
         doc_ids = archived_data['doc_id'].tolist()
-        selected_doc_id = st.selectbox("Select Record to Unarchive", options=doc_ids, key="unarchive_select")
-        if st.button("Unarchive Record", key="unarchive_button"):
-            unarchive_match_data(selected_doc_id)
-            st.rerun()  # Refresh the page to show updated data
+        selected_doc_ids = st.multiselect("Select Records to Unarchive", options=doc_ids, key="unarchive_select")
+        if st.button("Unarchive Selected Records", key="unarchive_button"):
+            if selected_doc_ids:
+                unarchive_match_data(selected_doc_ids)
+                st.rerun()  # Refresh the page to show updated data
+            else:
+                st.warning("Please select at least one record to unarchive.")
     else:
         st.info("No archived data available to unarchive.")
