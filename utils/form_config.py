@@ -1,21 +1,23 @@
 # utils/form_config.py
 MATCH_INFO = {
     'basic_info': [
-        {'name': 'team_number', 'label': 'Team Number', 'type': 'text'},
-        {'name': 'match_number', 'label': 'Match Number', 'type': 'text'},
+        {'name': 'team_number', 'label': 'Team Number', 'type': 'number'},
+        {'name': 'match_number', 'label': 'Match Number', 'type': 'number'},
         {'name': 'alliance_color', 'label': 'Alliance', 'type': 'select', 'options': ['Red', 'Blue']},
         {'name': 'scouter_name', 'label': 'Scouter Name', 'type': 'text'},
-        # Removed 'match_result' from here
     ],
     'starting_position': {
         'name': 'starting_position',
         'label': 'Starting Position',
-        'type': 'radio',
+        'type': 'select',  # Changed from 'radio' to 'select' for dropdown
         'options': ['Left', 'Center', 'Right']
     }
 }
 
 AUTONOMOUS = {
+    'mobility': [
+        {'name': 'auto_taxi_left', 'label': 'Taxi Auto Off the Starting Line', 'type': 'checkbox'}  # Renamed label
+    ],
     'scoring': [
         {'name': 'auto_coral_l1', 'label': 'Coral Scored on L1', 'type': 'number'},
         {'name': 'auto_coral_l2', 'label': 'Coral Scored on L2', 'type': 'number'},
@@ -64,7 +66,7 @@ ENDGAME = {
         'name': 'climb_status',
         'label': 'Climb Status',
         'type': 'select',
-        'options': ['No Climb', 'Parked', 'Shallow Climb', 'Deep Climb']
+        'options': ['None', 'Parked', 'Shallow Climb', 'Deep Climb']
     }
 }
 

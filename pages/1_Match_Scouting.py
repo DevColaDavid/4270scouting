@@ -1,250 +1,290 @@
-# pages/1_Match_Scout_Form.py
 import streamlit as st
+from utils.form_config import MATCH_INFO, AUTONOMOUS, TELEOP, ENDGAME, PERFORMANCE_RATINGS, ANALYSIS
 from utils.utils import save_data
 
-# Set page layout to wide to utilize more screen width
-st.set_page_config(page_title="Match Scout Form", page_icon="📝", layout="wide")
+st.set_page_config(page_title="Match Scouting", page_icon="📝", layout="wide")
 
-# Custom CSS to adjust spacing and fill the width
+# Custom CSS for better styling
 st.markdown("""
     <style>
-    /* Adjust the overall page padding to reduce side empty space */
-    .main .block-container {
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-        padding-top: 2rem !important;
-        padding-bottom: 2rem !important;
+    .stButton>button {
+        background-color: #4CAF50;
+        color: white;
+        border-radius: 5px;
     }
-
-    /* Adjust the form container to fill the width */
-    .stForm {
-        width: 100% !important;
-        padding: 1rem !important;  /* Add padding inside the form */
-    }
-
-    /* Adjust spacing between columns */
-    .st-emotion-cache-1wmy9hl {
-        gap: 1.5rem !important;  /* Increase gap between columns */
-    }
-
-    /* Adjust spacing between form sections */
-    .stMarkdown, .stTextInput, .stNumberInput, .stSelectbox, .stSlider, .stTextArea, .stCheckbox {
-        margin-bottom: 1rem !important;  /* Add vertical spacing between elements */
-    }
-
-    /* Ensure the form elements are responsive */
-    @media (max-width: 768px) {
-        .st-emotion-cache-1wmy9hl {
-            gap: 0.5rem !important;  /* Reduce gap on smaller screens */
-        }
-        .stForm {
-            padding: 0.5rem !important;
-        }
-        .main .block-container {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
-        }
+    .stNumberInput, .stTextInput, .stSelectbox, .stCheckbox, .stSlider, .stTextArea {
+        margin-bottom: 15px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("Match Scout Form")
+st.title("📝 Match Scouting")
+st.markdown("Fill out the form below to scout a match.")
 
-# Use session state to manage form key for resetting
-if 'form_key' not in st.session_state:
-    st.session_state.form_key = "match_scout_form_0"
+# Initialize session state to manage form clearing
+if 'form_cleared' not in st.session_state:
+    st.session_state.form_cleared = False
 
-# Form for match scouting
-with st.form(key=st.session_state.form_key):
-    # Match Information
+# Create the form
+with st.form(key="scouting_form"):
+    form_data = {}
+
+    # Match Info Section
     st.subheader("Match Information")
-    col1, col2, col3 = st.columns(3, gap="medium")
+    col1, col2, col3 = st.columns(3)
     with col1:
-        team_number = st.number_input("Team Number", min_value=0, step=1)
+        for item in MATCH_INFO['basic_info'][:2]:  # Team Number, Match Number
+            name = item['name']
+            form_data[name] = st.number_input(
+                item['label'],
+                min_value=1,
+                step=1,
+                key=name,
+                value=1 if st.session_state.form_cleared else None
+            )
     with col2:
-        match_number = st.number_input("Match Number", min_value=0, step=1)
+        for item in MATCH_INFO['basic_info'][2:3]:  # Alliance Color
+            name = item['name']
+            form_data[name] = st.selectbox(
+                item['label'],
+                options=item['options'],
+                key=name,
+                index=0 if st.session_state.form_cleared else None
+            )
+        item = MATCH_INFO['starting_position']
+        name = item['name']
+        form_data[name] = st.selectbox(
+            item['label'],
+            options=item['options'],
+            key=name,
+            index=0 if st.session_state.form_cleared else None
+        )
     with col3:
-        alliance_color = st.selectbox("Alliance Color", options=["Red", "Blue"])
+        for item in MATCH_INFO['basic_info'][3:]:  # Scouter Name
+            name = item['name']
+            form_data[name] = st.text_input(
+                item['label'],
+                key=name,
+                value="" if st.session_state.form_cleared else None
+            )
 
-    col1, col2 = st.columns([2, 1], gap="medium")  # Adjusted ratio to stretch Scouter Name
-    with col1:
-        scouter_name = st.text_input("Scouter Name")
-    with col2:
-        starting_position = st.selectbox("Starting Position", options=["Left", "Middle", "Right"])
-
-    # Autonomous Period
+    # Autonomous Section
     st.subheader("Autonomous Period")
-    auto_taxi_left = st.checkbox("Robot Left Starting Position (Taxi)", value=False)
-
-    st.markdown("#### Coral Scored in Autonomous")
-    col1, col2, col3, col4 = st.columns(4, gap="medium")
+    # Mobility at the start
+    col1, col2, col3 = st.columns([1, 2, 2])
     with col1:
-        auto_coral_l1 = st.number_input("Level 1 Coral", min_value=0, step=1, key="auto_coral_l1")
+        st.markdown("**Mobility**")
+        for mobility_item in AUTONOMOUS['mobility']:
+            name = mobility_item['name']
+            form_data[name] = st.checkbox(
+                mobility_item['label'],
+                key=name,
+                value=False if st.session_state.form_cleared else None
+            )
     with col2:
-        auto_coral_l2 = st.number_input("Level 2 Coral", min_value=0, step=1, key="auto_coral_l2")
+        pass  # Empty column for spacing
     with col3:
-        auto_coral_l3 = st.number_input("Level 3 Coral", min_value=0, step=1, key="auto_coral_l3")
-    with col4:
-        auto_coral_l4 = st.number_input("Level 4 Coral", min_value=0, step=1, key="auto_coral_l4")
+        pass  # Empty column for spacing
 
-    st.markdown("#### Coral Missed in Autonomous")
-    col1, col2, col3, col4 = st.columns(4, gap="medium")
+    # Scoring and Missed Attempts side by side
+    col1, col2 = st.columns(2)
     with col1:
-        auto_missed_coral_l1 = st.number_input("Missed Level 1 Coral", min_value=0, step=1, key="auto_missed_coral_l1")
+        st.markdown("**Coral Scored**")
+        for scoring_item in AUTONOMOUS['scoring']:
+            name = scoring_item['name']
+            form_data[name] = st.number_input(
+                scoring_item['label'],
+                min_value=0,
+                value=0 if st.session_state.form_cleared else None,
+                step=1,
+                key=name
+            )
     with col2:
-        auto_missed_coral_l2 = st.number_input("Missed Level 2 Coral", min_value=0, step=1, key="auto_missed_coral_l2")
-    with col3:
-        auto_missed_coral_l3 = st.number_input("Missed Level 3 Coral", min_value=0, step=1, key="auto_missed_coral_l3")
-    with col4:
-        auto_missed_coral_l4 = st.number_input("Missed Level 4 Coral", min_value=0, step=1, key="auto_missed_coral_l4")
+        st.markdown("**Coral Missed**")
+        for missed_item in AUTONOMOUS['missed_attempts']:
+            name = missed_item['name']
+            form_data[name] = st.number_input(
+                missed_item['label'],
+                min_value=0,
+                value=0 if st.session_state.form_cleared else None,
+                step=1,
+                key=name
+            )
 
-    st.markdown("#### Algae Management in Autonomous")
-    col1, col2, col3 = st.columns(3, gap="medium")
+    # Algae Management
+    col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
-        auto_algae_barge = st.number_input("Algae to Barge", min_value=0, step=1, key="auto_algae_barge")
-        auto_missed_algae_barge = st.number_input("Missed Algae to Barge", min_value=0, step=1, key="auto_missed_algae_barge")
+        st.markdown("**Algae Scored**")
+        for algae_item in AUTONOMOUS['algae_management'][:2]:  # Algae to Barge, Processor
+            name = algae_item['name']
+            form_data[name] = st.number_input(
+                algae_item['label'],
+                min_value=0,
+                value=0 if st.session_state.form_cleared else None,
+                step=1,
+                key=name
+            )
     with col2:
-        auto_algae_processor = st.number_input("Algae to Processor", min_value=0, step=1, key="auto_algae_processor")
-        auto_missed_algae_processor = st.number_input("Missed Algae to Processor", min_value=0, step=1, key="auto_missed_algae_processor")
+        st.markdown("**Algae Missed**")
+        for algae_item in AUTONOMOUS['algae_management'][2:4]:  # Missed Algae to Barge, Processor
+            name = algae_item['name']
+            form_data[name] = st.number_input(
+                algae_item['label'],
+                min_value=0,
+                value=0 if st.session_state.form_cleared else None,
+                step=1,
+                key=name
+            )
     with col3:
-        auto_algae_removed = st.number_input("Algae Removed", min_value=0, step=1, key="auto_algae_removed")
+        st.markdown("**Algae Removed**")
+        for algae_item in AUTONOMOUS['algae_management'][4:5]:  # Algae Removed
+            name = algae_item['name']
+            form_data[name] = st.number_input(
+                algae_item['label'],
+                min_value=0,
+                value=0 if st.session_state.form_cleared else None,
+                step=1,
+                key=name
+            )
 
-    auto_qa = st.text_area("Autonomous Qualitative Assessment", placeholder="Describe autonomous performance...")
-
-    # Teleop Period
+    # Teleop Section
     st.subheader("Teleop Period")
-    st.markdown("#### Coral Scored in Teleop")
-    col1, col2, col3, col4 = st.columns(4, gap="medium")
+    # Scoring and Missed Attempts side by side
+    col1, col2 = st.columns(2)
     with col1:
-        teleop_coral_l1 = st.number_input("Level 1 Coral", min_value=0, step=1, key="teleop_coral_l1")
+        st.markdown("**Coral Scored**")
+        for scoring_item in TELEOP['scoring']:
+            name = scoring_item['name']
+            form_data[name] = st.number_input(
+                scoring_item['label'],
+                min_value=0,
+                value=0 if st.session_state.form_cleared else None,
+                step=1,
+                key=name
+            )
     with col2:
-        teleop_coral_l2 = st.number_input("Level 2 Coral", min_value=0, step=1, key="teleop_coral_l2")
-    with col3:
-        teleop_coral_l3 = st.number_input("Level 3 Coral", min_value=0, step=1, key="teleop_coral_l3")  # Fixed label from "Level 1 Coral" to "Level 3 Coral"
-    with col4:
-        teleop_coral_l4 = st.number_input("Level 4 Coral", min_value=0, step=1, key="teleop_coral_l4")
+        st.markdown("**Coral Missed**")
+        for missed_item in TELEOP['missed_attempts']:
+            name = missed_item['name']
+            form_data[name] = st.number_input(
+                missed_item['label'],
+                min_value=0,
+                value=0 if st.session_state.form_cleared else None,
+                step=1,
+                key=name
+            )
 
-    st.markdown("#### Coral Missed in Teleop")
-    col1, col2, col3, col4 = st.columns(4, gap="medium")
+    # Algae Management
+    col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
-        teleop_missed_coral_l1 = st.number_input("Missed Level 1 Coral", min_value=0, step=1, key="teleop_missed_coral_l1")
+        st.markdown("**Algae Scored**")
+        for algae_item in TELEOP['algae_management'][:2]:  # Algae to Barge, Processor
+            name = algae_item['name']
+            form_data[name] = st.number_input(
+                algae_item['label'],
+                min_value=0,
+                value=0 if st.session_state.form_cleared else None,
+                step=1,
+                key=name
+            )
     with col2:
-        teleop_missed_coral_l2 = st.number_input("Missed Level 2 Coral", min_value=0, step=1, key="teleop_missed_coral_l2")
+        st.markdown("**Algae Missed**")
+        for algae_item in TELEOP['algae_management'][2:4]:  # Missed Algae to Barge, Processor
+            name = algae_item['name']
+            form_data[name] = st.number_input(
+                algae_item['label'],
+                min_value=0,
+                value=0 if st.session_state.form_cleared else None,
+                step=1,
+                key=name
+            )
     with col3:
-        teleop_missed_coral_l3 = st.number_input("Missed Level 3 Coral", min_value=0, step=1, key="teleop_missed_coral_l3")
-    with col4:
-        teleop_missed_coral_l4 = st.number_input("Missed Level 4 Coral", min_value=0, step=1, key="teleop_missed_coral_l4")
+        st.markdown("**Algae Removed**")
+        for algae_item in TELEOP['algae_management'][4:5]:  # Algae Removed
+            name = algae_item['name']
+            form_data[name] = st.number_input(
+                algae_item['label'],
+                min_value=0,
+                value=0 if st.session_state.form_cleared else None,
+                step=1,
+                key=name
+            )
 
-    st.markdown("#### Algae Management in Teleop")
-    col1, col2, col3 = st.columns(3, gap="medium")
-    with col1:
-        teleop_algae_barge = st.number_input("Algae to Barge", min_value=0, step=1, key="teleop_algae_barge")
-        teleop_missed_algae_barge = st.number_input("Missed Algae to Barge", min_value=0, step=1, key="teleop_missed_algae_barge")
-    with col2:
-        teleop_algae_processor = st.number_input("Algae to Processor", min_value=0, step=1, key="teleop_algae_processor")
-        teleop_missed_algae_processor = st.number_input("Missed Algae to Processor", min_value=0, step=1, key="teleop_missed_algae_processor")
-    with col3:
-        teleop_algae_removed = st.number_input("Algae Removed", min_value=0, step=1, key="teleop_algae_removed")
-
-    teleop_qa = st.text_area("Teleop Qualitative Assessment", placeholder="Describe teleop performance...")
-
-    # Endgame
+    # Endgame Section
     st.subheader("Endgame")
-    climb_status = st.selectbox("Climb Status", options=["No Climb", "Parked", "Shallow Climb", "Deep Climb"])
-
-    # Performance Ratings
-    st.subheader("Performance Ratings")
-    col1, col2, col3 = st.columns(3, gap="medium")
+    col1, col2, col3 = st.columns([1, 2, 2])
     with col1:
-        defense_rating = st.slider("Defense Rating", 0.0, 5.0, 0.0, 0.1)
+        item = ENDGAME['climb_status']
+        name = item['name']
+        form_data[name] = st.selectbox(
+            item['label'],
+            options=item['options'],
+            key=name,
+            index=0 if st.session_state.form_cleared else None
+        )
     with col2:
-        speed_rating = st.slider("Speed Rating", 0.0, 5.0, 0.0, 0.1)
+        pass  # Empty column for spacing
     with col3:
-        driver_skill_rating = st.slider("Driver Skill Rating", 0.0, 5.0, 0.0, 0.1)
+        pass  # Empty column for spacing
 
-    defense_qa = st.text_area("Defense Qualitative Assessment", placeholder="Describe defense performance...")
+    # Performance Ratings Section
+    st.subheader("Performance Ratings")
+    col1, col2, col3 = st.columns(3)
+    for idx, rating_item in enumerate(PERFORMANCE_RATINGS['ratings']):
+        with [col1, col2, col3][idx % 3]:
+            name = rating_item['name']
+            form_data[name] = st.slider(
+                rating_item['label'],
+                min_value=rating_item['min'],
+                max_value=rating_item['max'],
+                value=3 if st.session_state.form_cleared else None,
+                step=1,
+                key=name
+            )
 
-    # Additional Information
-    st.subheader("Additional Information")
-    col1, col2 = st.columns([1, 1], gap="medium")
-    with col1:
-        match_result = st.selectbox("Match Result", options=["Win", "Loss", "Tie"])
-    with col2:
-        # Add an empty column to maintain spacing
-        st.empty()
+    # Analysis Section
+    st.subheader("Qualitative Analysis")
+    col1, col2 = st.columns(2)
+    for idx, question_item in enumerate(ANALYSIS['questions']):
+        with [col1, col2][idx % 2]:
+            name = question_item['name']
+            form_data[name] = st.text_area(
+                question_item['label'],
+                help=question_item.get('help', ''),
+                key=name,
+                value="" if st.session_state.form_cleared else None
+            )
 
-    comments = st.text_area("Additional Comments", placeholder="Any other observations...")
-
-    # Submit and Clear Buttons
-    col1, col2 = st.columns(2, gap="medium")
+    # Submit and Clear buttons
+    col1, col2 = st.columns(2)
     with col1:
         submit_button = st.form_submit_button(label="Submit Match Data")
     with col2:
-        clear_button = st.form_submit_button(label="Clear All")
+        clear_button = st.form_submit_button(label="Clear Form")
 
-    if submit_button:
-        # Validate required fields
-        if not team_number or not match_number:
-            st.error("Team Number and Match Number are required.")
-        elif not scouter_name:
-            st.error("Scouter Name is required.")
+# Handle form submission and clearing
+if submit_button:
+    # Validate required fields
+    if not form_data.get("team_number") or form_data["team_number"] <= 0:
+        st.error("Please enter a valid team number.")
+    elif not form_data.get("match_number") or form_data["match_number"] <= 0:
+        st.error("Please enter a valid match number.")
+    elif not form_data.get("scouter_name"):
+        st.error("Please enter the scouter's name.")
+    else:
+        # Save data to Firestore
+        success, doc_id = save_data(form_data)
+        if success:
+            st.success(f"Match data submitted successfully! Document ID: {doc_id}")  # Green confirmation
+            st.balloons()  # Balloon effect
+            st.session_state.form_cleared = False  # Reset the form_cleared state
         else:
-            # Prepare match data
-            match_data = {
-                "team_number": int(team_number),
-                "match_number": int(match_number),
-                "alliance_color": alliance_color,
-                "scouter_name": scouter_name,
-                "starting_position": starting_position,
-                "auto_taxi_left": auto_taxi_left,
-                "auto_coral_l1": int(auto_coral_l1),
-                "auto_coral_l2": int(auto_coral_l2),
-                "auto_coral_l3": int(auto_coral_l3),
-                "auto_coral_l4": int(auto_coral_l4),
-                "auto_missed_coral_l1": int(auto_missed_coral_l1),
-                "auto_missed_coral_l2": int(auto_missed_coral_l2),
-                "auto_missed_coral_l3": int(auto_missed_coral_l3),
-                "auto_missed_coral_l4": int(auto_missed_coral_l4),
-                "auto_algae_barge": int(auto_algae_barge),
-                "auto_algae_processor": int(auto_algae_processor),
-                "auto_missed_algae_barge": int(auto_missed_algae_barge),
-                "auto_missed_algae_processor": int(auto_missed_algae_processor),
-                "auto_algae_removed": int(auto_algae_removed),
-                "auto_qa": auto_qa,
-                "teleop_coral_l1": int(teleop_coral_l1),
-                "teleop_coral_l2": int(teleop_coral_l2),
-                "teleop_coral_l3": int(teleop_coral_l3),
-                "teleop_coral_l4": int(teleop_coral_l4),
-                "teleop_missed_coral_l1": int(teleop_missed_coral_l1),
-                "teleop_missed_coral_l2": int(teleop_missed_coral_l2),
-                "teleop_missed_coral_l3": int(teleop_missed_coral_l3),
-                "teleop_missed_coral_l4": int(teleop_missed_coral_l4),
-                "teleop_algae_barge": int(teleop_algae_barge),
-                "teleop_algae_processor": int(teleop_algae_processor),
-                "teleop_missed_algae_barge": int(teleop_missed_algae_barge),
-                "teleop_missed_algae_processor": int(teleop_missed_algae_processor),
-                "teleop_algae_removed": int(teleop_algae_removed),
-                "teleop_qa": teleop_qa,
-                "climb_status": climb_status,
-                "defense_rating": float(defense_rating),
-                "speed_rating": float(speed_rating),
-                "driver_skill_rating": float(driver_skill_rating),
-                "defense_qa": defense_qa,
-                "match_result": match_result,
-                "comments": comments
-            }
+            st.error("Failed to submit match data.")
 
-            # Save the data
-            success, message = save_data(match_data)
-            if success:
-                st.success(f"Match data submitted successfully! Document ID: {message}")
-                st.balloons()  # Trigger balloon animation on successful submission
-                # Reset the form by changing the form key
-                st.session_state.form_key = f"match_scout_form_{int(st.session_state.form_key.split('_')[-1]) + 1}"
-            else:
-                st.error(f"Failed to submit match data: {message}")
+if clear_button:
+    st.session_state.form_cleared = True  # Trigger form clearing
+    st.rerun()  # Rerun the app to reset the form fields
 
-    if clear_button:
-        # Reset the form by changing the form key
-        st.session_state.form_key = f"match_scout_form_{int(st.session_state.form_key.split('_')[-1]) + 1}"
-        st.rerun()  # Force a rerun to reset the form
+# Reset the form_cleared state after clearing
+if st.session_state.form_cleared:
+    st.session_state.form_cleared = False
