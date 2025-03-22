@@ -1,4 +1,3 @@
-# app/3_Team_Statistics.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -16,6 +15,21 @@ if df is None or df.empty:
     st.info("No match data available to display team statistics.")
     st.stop()
 
+# Ensure numeric columns are properly typed
+numeric_cols = [
+    'match_number', 'team_number',
+    'auto_coral_l1', 'auto_coral_l2', 'auto_coral_l3', 'auto_coral_l4',
+    'auto_missed_coral_l1', 'auto_missed_coral_l2', 'auto_missed_coral_l3', 'auto_missed_coral_l4',
+    'auto_algae_barge', 'auto_algae_processor', 'auto_missed_algae_barge', 'auto_missed_algae_processor', 'auto_algae_removed',
+    'teleop_coral_l1', 'teleop_coral_l2', 'teleop_coral_l3', 'teleop_coral_l4',
+    'teleop_missed_coral_l1', 'teleop_missed_coral_l2', 'teleop_missed_coral_l3', 'teleop_missed_coral_l4',
+    'teleop_algae_barge', 'teleop_algae_processor', 'teleop_missed_algae_barge', 'teleop_missed_algae_processor', 'teleop_algae_removed',
+    'defense_rating', 'speed_rating', 'driver_skill_rating'
+]
+for col in numeric_cols:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
 # Convert team_number to string to ensure consistency
 df['team_number'] = df['team_number'].astype(str)
 
@@ -29,15 +43,35 @@ required_cols = [
 ]
 
 # Calculate match scores and alliance bonuses
+score_columns = ['auto_score', 'teleop_score', 'endgame_score', 'total_score']
 if all(col in df.columns for col in required_cols):
-    df = df.join(df.apply(calculate_match_score, axis=1))
+    # Only calculate scores if they don't already exist
+    if not all(col in df.columns for col in score_columns):
+        scores = df.apply(calculate_match_score, axis=1)
+        df[score_columns] = scores
 
     # Calculate alliance-level bonuses
     def calculate_alliance_bonuses(df):
+        # Ensure match_number and alliance_color are in the correct format
+        if 'match_number' in df.columns and 'alliance_color' in df.columns:
+            # Handle NaN values and ensure match_number is a string
+            df['match_number'] = df['match_number'].astype(str)
+            # Standardize alliance_color (e.g., to lowercase)
+            df['alliance_color'] = df['alliance_color'].fillna('unknown').str.lower()
+        else:
+            df['coop_bonus'] = 0
+            df['harmony_bonus'] = 0
+            return df
+
+        # Co-op Bonus: 15 points if alliance scores 5 coral on at least 3 levels
         coral_cols = [
             'auto_coral_l1', 'auto_coral_l2', 'auto_coral_l3', 'auto_coral_l4',
             'teleop_coral_l1', 'teleop_coral_l2', 'teleop_coral_l3', 'teleop_coral_l4'
         ]
+        # Ensure all coral columns exist; fill missing ones with 0
+        for col in coral_cols:
+            if col not in df.columns:
+                df[col] = 0
         alliance_coral = df.groupby(['match_number', 'alliance_color'])[coral_cols].sum().reset_index()
         alliance_coral['l1_total'] = alliance_coral['auto_coral_l1'] + alliance_coral['teleop_coral_l1']
         alliance_coral['l2_total'] = alliance_coral['auto_coral_l2'] + alliance_coral['teleop_coral_l2']
@@ -53,24 +87,52 @@ if all(col in df.columns for col in required_cols):
             lambda x: 15 if x >= 3 else 0
         )
 
-        alliance_climb = df.groupby(['match_number', 'alliance_color'])['climb_status'].value_counts().unstack(fill_value=0)
-        alliance_climb['num_robots'] = df.groupby(['match_number', 'alliance_color'])['team_number'].nunique()
-        alliance_climb['num_climbs'] = alliance_climb.get('Shallow Climb', 0) + alliance_climb.get('Deep Climb', 0)
-        alliance_climb['harmony_bonus'] = alliance_climb.apply(
-            lambda row: 15 if row['num_climbs'] == row['num_robots'] and row['num_robots'] > 0 else 0, axis=1
-        )
+        # Ensure merge keys are consistent
+        alliance_coral['match_number'] = alliance_coral['match_number'].astype(str)
+        alliance_coral['alliance_color'] = alliance_coral['alliance_color'].str.lower()
 
+        # Merge coop_bonus into df
         df = df.merge(
             alliance_coral[['match_number', 'alliance_color', 'coop_bonus']],
             on=['match_number', 'alliance_color'],
             how='left'
         )
+
+        # Ensure coop_bonus exists, even if merge fails
+        if 'coop_bonus' not in df.columns:
+            df['coop_bonus'] = 0
+
+        # Harmony Bonus: 15 points if all robots in the alliance climb (Shallow or Deep)
+        if 'climb_status' in df.columns:
+            alliance_climb = df.groupby(['match_number', 'alliance_color'])['climb_status'].value_counts().unstack(fill_value=0)
+            alliance_climb['num_robots'] = df.groupby(['match_number', 'alliance_color'])['team_number'].nunique()
+            alliance_climb['num_climbs'] = alliance_climb.get('Shallow Climb', 0) + alliance_climb.get('Deep Climb', 0)
+            alliance_climb['harmony_bonus'] = alliance_climb.apply(
+                lambda row: 15 if row['num_climbs'] == row['num_robots'] and row['num_robots'] > 0 else 0, axis=1
+            )
+        else:
+            alliance_climb = df.groupby(['match_number', 'alliance_color'])['team_number'].nunique()
+            alliance_climb['harmony_bonus'] = 0
+
+        # Reset the index to convert match_number and alliance_color to columns
+        alliance_climb = alliance_climb.reset_index()
+
+        # Standardize the columns after resetting the index
+        alliance_climb['match_number'] = alliance_climb['match_number'].astype(str)
+        alliance_climb['alliance_color'] = alliance_climb['alliance_color'].str.lower()
+
+        # Merge harmony_bonus into df
         df = df.merge(
-            alliance_climb[['harmony_bonus']].reset_index()[['match_number', 'alliance_color', 'harmony_bonus']],
+            alliance_climb[['match_number', 'alliance_color', 'harmony_bonus']],
             on=['match_number', 'alliance_color'],
             how='left'
         )
 
+        # Ensure harmony_bonus exists, even if merge fails
+        if 'harmony_bonus' not in df.columns:
+            df['harmony_bonus'] = 0
+
+        # Add bonuses to total score
         df['total_score'] = (
             df['total_score'] +
             df['coop_bonus'].fillna(0) +
@@ -91,8 +153,8 @@ df['teleop_coral_success'] = df['teleop_coral_l1'] + df['teleop_coral_l2'] + df[
 df['teleop_coral_missed'] = df['teleop_missed_coral_l1'] + df['teleop_missed_coral_l2'] + df['teleop_missed_coral_l3'] + df['teleop_missed_coral_l4']
 df['auto_coral_attempts'] = df['auto_coral_success'] + df['auto_coral_missed']
 df['teleop_coral_attempts'] = df['teleop_coral_success'] + df['teleop_coral_missed']
-df['auto_coral_success_ratio'] = df['auto_coral_success'] / df['auto_coral_attempts'].replace(0, 1)
-df['teleop_coral_success_ratio'] = df['teleop_coral_success'] / df['teleop_coral_attempts'].replace(0, 1)
+df['auto_coral_success_ratio'] = (df['auto_coral_success'] / df['auto_coral_attempts'].replace(0, pd.NA)).fillna(0)
+df['teleop_coral_success_ratio'] = (df['teleop_coral_success'] / df['teleop_coral_attempts'].replace(0, pd.NA)).fillna(0)
 
 df['auto_algae_success'] = df['auto_algae_barge'] + df['auto_algae_processor']
 df['auto_algae_missed'] = df['auto_missed_algae_barge'] + df['auto_missed_algae_processor']
@@ -100,8 +162,8 @@ df['teleop_algae_success'] = df['teleop_algae_barge'] + df['teleop_algae_process
 df['teleop_algae_missed'] = df['teleop_missed_algae_barge'] + df['teleop_missed_algae_processor']
 df['auto_algae_attempts'] = df['auto_algae_success'] + df['auto_algae_missed']
 df['teleop_algae_attempts'] = df['teleop_algae_success'] + df['teleop_algae_missed']
-df['auto_algae_success_ratio'] = df['auto_algae_success'] / df['auto_algae_attempts'].replace(0, 1)
-df['teleop_algae_success_ratio'] = df['teleop_algae_success'] / df['teleop_algae_attempts'].replace(0, 1)
+df['auto_algae_success_ratio'] = (df['auto_algae_success'] / df['auto_algae_attempts'].replace(0, pd.NA)).fillna(0)
+df['teleop_algae_success_ratio'] = (df['teleop_algae_success'] / df['teleop_algae_attempts'].replace(0, pd.NA)).fillna(0)
 
 # Calculate match outcomes (wins/losses/ties) based on scores
 def calculate_match_outcomes(df):
@@ -218,7 +280,7 @@ team_stats = team_data.groupby('team_number').agg({
     'auto_missed_coral_l1': 'mean',
     'auto_missed_coral_l2': 'mean',
     'auto_missed_coral_l3': 'mean',
-    "auto_missed_coral_l4": 'mean',
+    'auto_missed_coral_l4': 'mean',
     'teleop_missed_coral_l1': 'mean',
     'teleop_missed_coral_l2': 'mean',
     'teleop_missed_coral_l3': 'mean',
@@ -238,6 +300,9 @@ team_stats = team_data.groupby('team_number').agg({
     'auto_algae_success_ratio': 'mean',
     'teleop_algae_success_ratio': 'mean',
 }).reset_index()
+
+# Fill NaN values with 0 to prevent display issues
+team_stats = team_stats.fillna(0)
 
 # Calculate total objects scored (coral + algae)
 team_stats['total_auto_objects_scored'] = (
@@ -370,32 +435,44 @@ with col1:
     st.markdown("#### Climb Distribution")
     climb_data = climb_stats.melt(id_vars=['team_number'], value_vars=['Shallow Climb', 'Deep Climb', 'No Climb'],
                                   var_name='Climb Status', value_name='Percentage')
-    fig_climb = px.pie(
-        climb_data,
-        names='Climb Status',
-        values='Percentage',
-        title=f"Team {selected_team} Climb Distribution",
-        hole=0.3
-    )
-    fig_climb.update_traces(textinfo='percent+label')
-    st.plotly_chart(fig_climb, use_container_width=True)
+    # Check if there is any non-zero data to plot
+    if climb_data['Percentage'].sum() > 0:
+        fig_climb = px.pie(
+            climb_data,
+            names='Climb Status',
+            values='Percentage',
+            title=f"Team {selected_team} Climb Distribution",
+            hole=0.3
+        )
+        fig_climb.update_traces(textinfo='percent+label')
+        st.plotly_chart(fig_climb, use_container_width=True)
+    else:
+        st.write("No climb data available to display.")
 
 with col2:
     st.markdown("#### Strategy Distribution")
     role_data = role_distribution.melt(id_vars=['team_number'], value_vars=['Offense', 'Defense', 'Both', 'Neither'],
                                        var_name='Primary Role', value_name='Percentage')
-    fig_role = px.pie(
-        role_data,
-        names='Primary Role',
-        values='Percentage',
-        title=f"Team {selected_team} Strategy Distribution",
-        hole=0.3
-    )
-    fig_role.update_traces(textinfo='percent+label')
-    st.plotly_chart(fig_role, use_container_width=True)
+    # Check if there is any non-zero data to plot
+    if role_data['Percentage'].sum() > 0:
+        fig_role = px.pie(
+            role_data,
+            names='Primary Role',
+            values='Percentage',
+            title=f"Team {selected_team} Strategy Distribution",
+            hole=0.3
+        )
+        fig_role.update_traces(textinfo='percent+label')
+        st.plotly_chart(fig_role, use_container_width=True)
+    else:
+        st.write("No strategy data available to display.")
 
 # Plot performance over matches
 st.subheader("Performance Over Matches")
+# Ensure match_number is numeric and sort the data
+team_data = team_data.copy()  # Avoid SettingWithCopyWarning
+team_data['match_number'] = pd.to_numeric(team_data['match_number'], errors='coerce')
+team_data = team_data.sort_values('match_number')
 fig = px.line(
     team_data,
     x='match_number',
