@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.express as px
 from utils.utils import load_data, calculate_match_score
 
 st.set_page_config(page_title="Match Prediction", page_icon="📉", layout="wide")
@@ -15,6 +16,21 @@ if df is None or df.empty:
     st.info("No match data available for prediction.")
     st.stop()
 
+# Ensure numeric columns are properly typed
+numeric_cols = [
+    'match_number', 'team_number',
+    'auto_coral_l1', 'auto_coral_l2', 'auto_coral_l3', 'auto_coral_l4',
+    'auto_missed_coral_l1', 'auto_missed_coral_l2', 'auto_missed_coral_l3', 'auto_missed_coral_l4',
+    'auto_algae_barge', 'auto_algae_processor', 'auto_missed_algae_barge', 'auto_missed_algae_processor', 'auto_algae_removed',
+    'teleop_coral_l1', 'teleop_coral_l2', 'teleop_coral_l3', 'teleop_coral_l4',
+    'teleop_missed_coral_l1', 'teleop_missed_coral_l2', 'teleop_missed_coral_l3', 'teleop_missed_coral_l4',
+    'teleop_algae_barge', 'teleop_algae_processor', 'teleop_missed_algae_barge', 'teleop_missed_algae_processor', 'teleop_algae_removed',
+    'defense_rating', 'speed_rating', 'driver_skill_rating'
+]
+for col in numeric_cols:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
 # Convert team_number to string to ensure consistency
 df['team_number'] = df['team_number'].astype(str)
 
@@ -28,15 +44,35 @@ required_cols = [
 ]
 
 # Calculate match scores and alliance bonuses
+score_columns = ['auto_score', 'teleop_score', 'endgame_score', 'total_score']
 if all(col in df.columns for col in required_cols):
-    df = df.join(df.apply(calculate_match_score, axis=1))
+    # Only calculate scores if they don't already exist
+    if not all(col in df.columns for col in score_columns):
+        scores = df.apply(calculate_match_score, axis=1)
+        df[score_columns] = scores
 
     # Calculate alliance-level bonuses
     def calculate_alliance_bonuses(df):
+        # Ensure match_number and alliance_color are in the correct format
+        if 'match_number' in df.columns and 'alliance_color' in df.columns:
+            # Handle NaN values and ensure match_number is a string
+            df['match_number'] = df['match_number'].astype(str)
+            # Standardize alliance_color (e.g., to lowercase)
+            df['alliance_color'] = df['alliance_color'].fillna('unknown').str.lower()
+        else:
+            df['coop_bonus'] = 0
+            df['harmony_bonus'] = 0
+            return df
+
+        # Co-op Bonus: 15 points if alliance scores 5 coral on at least 3 levels
         coral_cols = [
             'auto_coral_l1', 'auto_coral_l2', 'auto_coral_l3', 'auto_coral_l4',
             'teleop_coral_l1', 'teleop_coral_l2', 'teleop_coral_l3', 'teleop_coral_l4'
         ]
+        # Ensure all coral columns exist; fill missing ones with 0
+        for col in coral_cols:
+            if col not in df.columns:
+                df[col] = 0
         alliance_coral = df.groupby(['match_number', 'alliance_color'])[coral_cols].sum().reset_index()
         alliance_coral['l1_total'] = alliance_coral['auto_coral_l1'] + alliance_coral['teleop_coral_l1']
         alliance_coral['l2_total'] = alliance_coral['auto_coral_l2'] + alliance_coral['teleop_coral_l2']
@@ -52,24 +88,52 @@ if all(col in df.columns for col in required_cols):
             lambda x: 15 if x >= 3 else 0
         )
 
-        alliance_climb = df.groupby(['match_number', 'alliance_color'])['climb_status'].value_counts().unstack(fill_value=0)
-        alliance_climb['num_robots'] = df.groupby(['match_number', 'alliance_color'])['team_number'].nunique()
-        alliance_climb['num_climbs'] = alliance_climb.get('Shallow Climb', 0) + alliance_climb.get('Deep Climb', 0)
-        alliance_climb['harmony_bonus'] = alliance_climb.apply(
-            lambda row: 15 if row['num_climbs'] == row['num_robots'] and row['num_robots'] > 0 else 0, axis=1
-        )
+        # Ensure merge keys are consistent
+        alliance_coral['match_number'] = alliance_coral['match_number'].astype(str)
+        alliance_coral['alliance_color'] = alliance_coral['alliance_color'].str.lower()
 
+        # Merge coop_bonus into df
         df = df.merge(
             alliance_coral[['match_number', 'alliance_color', 'coop_bonus']],
             on=['match_number', 'alliance_color'],
             how='left'
         )
+
+        # Ensure coop_bonus exists, even if merge fails
+        if 'coop_bonus' not in df.columns:
+            df['coop_bonus'] = 0
+
+        # Harmony Bonus: 15 points if all robots in the alliance climb (Shallow or Deep)
+        if 'climb_status' in df.columns:
+            alliance_climb = df.groupby(['match_number', 'alliance_color'])['climb_status'].value_counts().unstack(fill_value=0)
+            alliance_climb['num_robots'] = df.groupby(['match_number', 'alliance_color'])['team_number'].nunique()
+            alliance_climb['num_climbs'] = alliance_climb.get('Shallow Climb', 0) + alliance_climb.get('Deep Climb', 0)
+            alliance_climb['harmony_bonus'] = alliance_climb.apply(
+                lambda row: 15 if row['num_climbs'] == row['num_robots'] and row['num_robots'] > 0 else 0, axis=1
+            )
+        else:
+            alliance_climb = df.groupby(['match_number', 'alliance_color'])['team_number'].nunique()
+            alliance_climb['harmony_bonus'] = 0
+
+        # Reset the index to convert match_number and alliance_color to columns
+        alliance_climb = alliance_climb.reset_index()
+
+        # Standardize the columns after resetting the index
+        alliance_climb['match_number'] = alliance_climb['match_number'].astype(str)
+        alliance_climb['alliance_color'] = alliance_climb['alliance_color'].str.lower()
+
+        # Merge harmony_bonus into df
         df = df.merge(
-            alliance_climb[['harmony_bonus']].reset_index()[['match_number', 'alliance_color', 'harmony_bonus']],
+            alliance_climb[['match_number', 'alliance_color', 'harmony_bonus']],
             on=['match_number', 'alliance_color'],
             how='left'
         )
 
+        # Ensure harmony_bonus exists, even if merge fails
+        if 'harmony_bonus' not in df.columns:
+            df['harmony_bonus'] = 0
+
+        # Add bonuses to total score
         df['total_score'] = (
             df['total_score'] +
             df['coop_bonus'].fillna(0) +
@@ -79,6 +143,28 @@ if all(col in df.columns for col in required_cols):
         return df
 
     df = calculate_alliance_bonuses(df)
+
+    # Calculate EPA (Expected Points Added)
+    def calculate_epa(df):
+        if 'match_number' in df.columns and 'alliance_color' in df.columns:
+            # Ensure consistent types for grouping
+            df['match_number'] = df['match_number'].astype(str)
+            df['alliance_color'] = df['alliance_color'].str.lower()
+            alliance_avg = df.groupby(['match_number', 'alliance_color'])['total_score'].mean().reset_index()
+            alliance_avg = alliance_avg.rename(columns={'total_score': 'alliance_avg'})
+            # Merge the average back into the original DataFrame
+            alliance_avg['match_number'] = alliance_avg['match_number'].astype(str)
+            alliance_avg['alliance_color'] = alliance_avg['alliance_color'].str.lower()
+            df = df.merge(alliance_avg, on=['match_number', 'alliance_color'], how='left')
+            # Calculate EPA as team score minus alliance average
+            df['epa'] = df['total_score'] - df['alliance_avg']
+            # Drop the temporary column
+            df = df.drop(columns=['alliance_avg'])
+        else:
+            df['epa'] = 0
+        return df
+
+    df = calculate_epa(df)
 else:
     st.warning("Cannot calculate match scores. Missing required columns.")
     st.stop()
@@ -90,8 +176,8 @@ df['teleop_coral_success'] = df['teleop_coral_l1'] + df['teleop_coral_l2'] + df[
 df['teleop_coral_missed'] = df['teleop_missed_coral_l1'] + df['teleop_missed_coral_l2'] + df['teleop_missed_coral_l3'] + df['teleop_missed_coral_l4']
 df['auto_coral_attempts'] = df['auto_coral_success'] + df['auto_coral_missed']
 df['teleop_coral_attempts'] = df['teleop_coral_success'] + df['teleop_coral_missed']
-df['auto_coral_success_ratio'] = df['auto_coral_success'] / df['auto_coral_attempts'].replace(0, 1)
-df['teleop_coral_success_ratio'] = df['teleop_coral_success'] / df['teleop_coral_attempts'].replace(0, 1)
+df['auto_coral_success_ratio'] = (df['auto_coral_success'] / df['auto_coral_attempts'].replace(0, pd.NA)).fillna(0)
+df['teleop_coral_success_ratio'] = (df['teleop_coral_success'] / df['teleop_coral_attempts'].replace(0, pd.NA)).fillna(0)
 
 df['auto_algae_success'] = df['auto_algae_barge'] + df['auto_algae_processor']
 df['auto_algae_missed'] = df['auto_missed_algae_barge'] + df['auto_missed_algae_processor']
@@ -99,62 +185,64 @@ df['teleop_algae_success'] = df['teleop_algae_barge'] + df['teleop_algae_process
 df['teleop_algae_missed'] = df['teleop_missed_algae_barge'] + df['teleop_missed_algae_processor']
 df['auto_algae_attempts'] = df['auto_algae_success'] + df['auto_algae_missed']
 df['teleop_algae_attempts'] = df['teleop_algae_success'] + df['teleop_algae_missed']
-df['auto_algae_success_ratio'] = df['auto_algae_success'] / df['auto_algae_attempts'].replace(0, 1)
-df['teleop_algae_success_ratio'] = df['teleop_algae_success'] / df['teleop_algae_attempts'].replace(0, 1)
+df['auto_algae_success_ratio'] = (df['auto_algae_success'] / df['auto_algae_attempts'].replace(0, pd.NA)).fillna(0)
+df['teleop_algae_success_ratio'] = (df['teleop_algae_success'] / df['teleop_algae_attempts'].replace(0, pd.NA)).fillna(0)
 
 # Team selection for prediction
 if 'team_number' in df.columns:
-    # Calculate climb_stats to determine which teams have climb data
-    climb_stats = df.groupby('team_number')['climb_status'].value_counts(normalize=True).unstack(fill_value=0)
-    # Only include teams that have a recorded climb_status (i.e., they appear in climb_stats.index)
-    team_numbers = sorted(climb_stats.index)
-    # Convert team_numbers to strings for consistency with st.multiselect
-    team_numbers = [str(team) for team in team_numbers]
+    # Use all teams with any data
+    team_numbers = sorted(df['team_number'].unique())
     st.subheader("Select Teams for the Match")
     col1, col2 = st.columns(2)
     with col1:
         red_alliance_teams = st.multiselect("Select Red Alliance Teams (up to 3)", options=team_numbers, max_selections=3)
     with col2:
         blue_alliance_teams = st.multiselect("Select Blue Alliance Teams (up to 3)", options=team_numbers, max_selections=3)
+
+    # Validate that no team is selected for both alliances
+    overlapping_teams = set(red_alliance_teams).intersection(set(blue_alliance_teams))
+    if overlapping_teams:
+        st.error(f"The following teams are selected for both alliances: {', '.join(overlapping_teams)}. Please select unique teams for each alliance.")
+        st.stop()
 else:
     st.error("Team number column not found in data.")
     st.stop()
 
 # Prediction logic
 if red_alliance_teams and blue_alliance_teams:
-    def calculate_alliance_score(team_scores, team_accuracy_adjustments):
-        if not team_scores:
-            return 0.0
-        weights = np.array([1.0, 0.8, 0.6])[:len(team_scores)]
-        team_accuracy_adjustments = [0.5 if pd.isna(adj) else adj for adj in team_accuracy_adjustments]
+    def calculate_alliance_score(team_metrics, metric='epa'):
+        if not team_metrics:
+            return 0.0, 0.0
+        # Use the specified metric (e.g., 'epa' or 'total_score')
+        scores = [metrics[metric] for metrics in team_metrics]
+        std_devs = [metrics[f'{metric}_std'] for metrics in team_metrics]
+        # Apply weights to the top teams (1.0, 0.8, 0.6)
+        weights = np.array([1.0, 0.8, 0.6])[:len(scores)]
         weighted_scores = [
-            max(score * weight * (1 + (adjustment - 0.5) * 0.2), 0.0)
-            for score, weight, adjustment in zip(sorted(team_scores, reverse=True), weights, sorted(team_accuracy_adjustments, reverse=True))
+            score * weight for score, weight in zip(sorted(scores, reverse=True), weights)
         ]
-        return sum(weighted_scores)
+        # Calculate weighted standard deviation for confidence interval
+        weighted_std = np.sqrt(sum((std * weight) ** 2 for std, weight in zip(sorted(std_devs, reverse=True), weights)))
+        return sum(weighted_scores), weighted_std
 
     def estimate_alliance_bonuses(data, alliance_teams, full_data):
         if not alliance_teams:
             return 0.0
         
-        # Use the full dataset to calculate climb_stats
+        # Calculate climb probability for Harmony bonus
         climb_stats = full_data.groupby('team_number')['climb_status'].value_counts(normalize=True).unstack(fill_value=0)
         climb_stats['climb_prob'] = climb_stats.get('Shallow Climb', 0) + climb_stats.get('Deep Climb', 0)
         
-        # Determine the type of climb_stats.index and convert alliance_teams accordingly
-        index_type = type(climb_stats.index[0]) if not climb_stats.empty else str
-        if index_type == int:
-            alliance_teams_converted = [int(team) for team in alliance_teams]
-        else:
-            alliance_teams_converted = [str(team) for team in alliance_teams]
+        # Ensure alliance_teams are strings to match df['team_number']
+        alliance_teams = [str(team) for team in alliance_teams]
         
         # Check for missing teams
-        missing_teams = [team for team in alliance_teams_converted if team not in climb_stats.index]
+        missing_teams = [team for team in alliance_teams if team not in climb_stats.index]
         if missing_teams:
-            present_teams = [team for team in alliance_teams_converted if team in climb_stats.index]
+            present_teams = [team for team in alliance_teams if team in climb_stats.index]
             harmony_bonus_prob = climb_stats.loc[present_teams, 'climb_prob'].prod() if present_teams else 0
         else:
-            harmony_bonus_prob = climb_stats.loc[alliance_teams_converted, 'climb_prob'].prod()
+            harmony_bonus_prob = climb_stats.loc[alliance_teams, 'climb_prob'].prod()
 
         # Calculate co-op bonus probability
         coral_cols = [
@@ -166,8 +254,8 @@ if red_alliance_teams and blue_alliance_teams:
         team_coral['l2_total'] = team_coral['auto_coral_l2'] + team_coral['teleop_coral_l2']
         team_coral['l3_total'] = team_coral['auto_coral_l3'] + team_coral['teleop_coral_l3']
         team_coral['l4_total'] = team_coral['auto_coral_l4'] + team_coral['teleop_coral_l4']
-        if not team_coral.empty and team_coral.index.isin(alliance_teams_converted).any():
-            avg_coral_per_level = team_coral.loc[team_coral.index.isin(alliance_teams_converted), ['l1_total', 'l2_total', 'l3_total', 'l4_total']].sum()
+        if not team_coral.empty and team_coral.index.isin(alliance_teams).any():
+            avg_coral_per_level = team_coral.loc[team_coral.index.isin(alliance_teams), ['l1_total', 'l2_total', 'l3_total', 'l4_total']].sum()
             levels_with_5_plus = (avg_coral_per_level >= 5).sum()
             coop_bonus_prob = min(1.0, levels_with_5_plus / 3)
         else:
@@ -176,55 +264,58 @@ if red_alliance_teams and blue_alliance_teams:
         expected_bonus = (coop_bonus_prob * 15) + (harmony_bonus_prob * 15)
         return max(expected_bonus, 0.0)
 
-    # Split data by alliance
+    # Calculate team metrics (EPA, total_score, and their standard deviations)
+    team_metrics = df.groupby('team_number').agg({
+        'epa': ['mean', 'std'],
+        'total_score': ['mean', 'std'],
+        'auto_score': 'mean',
+        'teleop_score': 'mean',
+        'endgame_score': 'mean',
+        'teleop_coral_success_ratio': 'mean',
+        'teleop_algae_success_ratio': 'mean',
+        'climb_status': lambda x: ((x == 'Shallow Climb') | (x == 'Deep Climb')).mean() * 100
+    }).reset_index()
+
+    # Flatten the multi-index columns
+    team_metrics.columns = [
+        'team_number', 'epa', 'epa_std', 'total_score', 'total_score_std',
+        'auto_score', 'teleop_score', 'endgame_score',
+        'teleop_coral_success_ratio', 'teleop_algae_success_ratio', 'climb_rate'
+    ]
+    team_metrics = team_metrics.fillna({'epa': 0, 'epa_std': 0, 'total_score': 0, 'total_score_std': 0})
+
+    # Prepare metrics for each team in the alliances
+    red_team_metrics = []
+    blue_team_metrics = []
+    insufficient_data_teams = []
+
+    for team in red_alliance_teams:
+        team_data = team_metrics[team_metrics['team_number'] == team]
+        if team_data.empty or team_data['total_score'].iloc[0] == 0:
+            insufficient_data_teams.append(f"Red Team {team}")
+            red_team_metrics.append({'epa': 0, 'epa_std': 0, 'total_score': 0, 'total_score_std': 0})
+        else:
+            red_team_metrics.append(team_data.iloc[0].to_dict())
+
+    for team in blue_alliance_teams:
+        team_data = team_metrics[team_metrics['team_number'] == team]
+        if team_data.empty or team_data['total_score'].iloc[0] == 0:
+            insufficient_data_teams.append(f"Blue Team {team}")
+            blue_team_metrics.append({'epa': 0, 'epa_std': 0, 'total_score': 0, 'total_score_std': 0})
+        else:
+            blue_team_metrics.append(team_data.iloc[0].to_dict())
+
+    # Display warning for teams with insufficient data
+    if insufficient_data_teams:
+        st.warning(f"Insufficient data for the following teams: {', '.join(insufficient_data_teams)}. Predictions may be inaccurate.")
+
+    # Calculate alliance scores using EPA
+    red_score, red_std = calculate_alliance_score(red_team_metrics, metric='epa')
+    blue_score, blue_std = calculate_alliance_score(blue_team_metrics, metric='epa')
+
+    # Split data by alliance for bonus estimation
     red_data = df[df['team_number'].isin(red_alliance_teams)]
     blue_data = df[df['team_number'].isin(blue_alliance_teams)]
-
-    # Debug: Check if red_data and blue_data are empty
-    if red_data.empty:
-        st.warning(f"No data found for Red Alliance teams: {red_alliance_teams}. Metrics will be unavailable.")
-    if blue_data.empty:
-        st.warning(f"No data found for Blue Alliance teams: {blue_alliance_teams}. Metrics will be unavailable.")
-
-    # Calculate average total scores for each team (to replace EPA)
-    red_team_scores = []
-    for team in red_alliance_teams:
-        team_data = df[df['team_number'] == team]
-        if not team_data.empty:
-            avg_score = team_data['total_score'].mean()
-            red_team_scores.append(avg_score if not pd.isna(avg_score) else 0.0)
-        else:
-            red_team_scores.append(0.0)
-
-    blue_team_scores = []
-    for team in blue_alliance_teams:
-        team_data = df[df['team_number'] == team]
-        if not team_data.empty:
-            avg_score = team_data['total_score'].mean()
-            blue_team_scores.append(avg_score if not pd.isna(avg_score) else 0.0)
-        else:
-            blue_team_scores.append(0.0)
-
-    # Calculate average success ratios for adjustment
-    if not red_data.empty:
-        red_accuracy = red_data.groupby('team_number')[['teleop_coral_success_ratio', 'teleop_algae_success_ratio']].mean()
-        red_accuracy['combined_accuracy'] = (red_accuracy['teleop_coral_success_ratio'] + red_accuracy['teleop_algae_success_ratio']) / 2
-        red_accuracy = red_accuracy.fillna(0.5)
-        red_accuracy_adjustments = [red_accuracy.loc[team, 'combined_accuracy'] if team in red_accuracy.index else 0.5 for team in red_alliance_teams]
-    else:
-        red_accuracy_adjustments = [0.5] * len(red_alliance_teams)
-
-    if not blue_data.empty:
-        blue_accuracy = blue_data.groupby('team_number')[['teleop_coral_success_ratio', 'teleop_algae_success_ratio']].mean()
-        blue_accuracy['combined_accuracy'] = (blue_accuracy['teleop_coral_success_ratio'] + blue_accuracy['teleop_algae_success_ratio']) / 2
-        blue_accuracy = blue_accuracy.fillna(0.5)
-        blue_accuracy_adjustments = [blue_accuracy.loc[team, 'combined_accuracy'] if team in blue_accuracy.index else 0.5 for team in blue_alliance_teams]
-    else:
-        blue_accuracy_adjustments = [0.5] * len(blue_alliance_teams)
-
-    # Calculate alliance scores with accuracy adjustments
-    red_score = calculate_alliance_score(red_team_scores, red_accuracy_adjustments)
-    blue_score = calculate_alliance_score(blue_team_scores, blue_accuracy_adjustments)
 
     # Estimate alliance bonuses
     red_bonus = estimate_alliance_bonuses(red_data, red_alliance_teams, df)
@@ -234,45 +325,37 @@ if red_alliance_teams and blue_alliance_teams:
     red_score = max(red_score + red_bonus, 0.0)
     blue_score = max(blue_score + blue_bonus, 0.0)
 
-    # Calculate win probability
-    if pd.isna(red_score) or pd.isna(blue_score):
-        red_win_prob = 50.0
-        blue_win_prob = 50.0
-    elif red_score == blue_score:
-        red_win_prob = 50.0
-        blue_win_prob = 50.0
-    else:
-        total_score = red_score + blue_score
-        if total_score == 0:
-            red_win_prob = 50.0
-            blue_win_prob = 50.0
-        else:
-            red_win_prob = (red_score / total_score) * 100
-            blue_win_prob = (blue_score / total_score) * 100
+    # Calculate confidence intervals (approximate 95% CI: mean ± 1.96 * std)
+    red_ci_lower = max(red_score - 1.96 * red_std, 0.0)
+    red_ci_upper = red_score + 1.96 * red_std
+    blue_ci_lower = max(blue_score - 1.96 * blue_std, 0.0)
+    blue_ci_upper = blue_score + 1.96 * blue_std
+
+    # Calculate win probability using a logistic function based on score difference
+    score_diff = red_score - blue_score
+    # Logistic function: P = 1 / (1 + exp(-k * (score_diff)))
+    k = 0.1  # Sensitivity parameter (adjustable)
+    red_win_prob = 100 / (1 + np.exp(-k * score_diff))
+    blue_win_prob = 100 - red_win_prob
 
     # Display prediction
     st.subheader("Match Prediction")
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("Red Alliance Predicted Score", f"{red_score:.2f}")
+        st.metric("Red Alliance Predicted Score", f"{red_score:.2f}", f"95% CI: [{red_ci_lower:.2f}, {red_ci_upper:.2f}]")
         st.metric("Red Alliance Win Probability", f"{red_win_prob:.1f}%")
     with col2:
-        st.metric("Blue Alliance Predicted Score", f"{blue_score:.2f}")
+        st.metric("Blue Alliance Predicted Score", f"{blue_score:.2f}", f"95% CI: [{blue_ci_lower:.2f}, {blue_ci_upper:.2f}]")
         st.metric("Blue Alliance Win Probability", f"{blue_win_prob:.1f}%")
 
     # Determine winner
-    if pd.isna(red_score) or pd.isna(blue_score):
-        st.info("Unable to predict the match due to missing data for some teams.")
-    elif red_score > blue_score:
+    if red_score > blue_score:
         st.success(f"Red Alliance is predicted to win by {red_score - blue_score:.2f} points!")
     elif blue_score > red_score:
         st.success(f"Blue Alliance is predicted to win by {blue_score - red_score:.2f} points!")
     else:
         st.info("The match is predicted to be a tie!")
 
-    # Provide reasons based on data
-    st.subheader("Reasons for Prediction")
-    
     # Calculate key metrics for each alliance
     if not red_data.empty:
         red_metrics = red_data.groupby('team_number').agg({
@@ -282,7 +365,8 @@ if red_alliance_teams and blue_alliance_teams:
             'endgame_score': 'mean',
             'teleop_coral_success_ratio': 'mean',
             'teleop_algae_success_ratio': 'mean',
-            'climb_status': lambda x: ((x == 'Shallow Climb') | (x == 'Deep Climb')).mean() * 100
+            'climb_status': lambda x: ((x == 'Shallow Climb') | (x == 'Deep Climb')).mean() * 100,
+            'epa': 'mean'
         }).mean()
     else:
         red_metrics = pd.Series({
@@ -292,7 +376,8 @@ if red_alliance_teams and blue_alliance_teams:
             'endgame_score': np.nan,
             'teleop_coral_success_ratio': np.nan,
             'teleop_algae_success_ratio': np.nan,
-            'climb_status': np.nan
+            'climb_status': np.nan,
+            'epa': np.nan
         })
 
     if not blue_data.empty:
@@ -303,7 +388,8 @@ if red_alliance_teams and blue_alliance_teams:
             'endgame_score': 'mean',
             'teleop_coral_success_ratio': 'mean',
             'teleop_algae_success_ratio': 'mean',
-            'climb_status': lambda x: ((x == 'Shallow Climb') | (x == 'Deep Climb')).mean() * 100
+            'climb_status': lambda x: ((x == 'Shallow Climb') | (x == 'Deep Climb')).mean() * 100,
+            'epa': 'mean'
         }).mean()
     else:
         blue_metrics = pd.Series({
@@ -313,12 +399,66 @@ if red_alliance_teams and blue_alliance_teams:
             'endgame_score': np.nan,
             'teleop_coral_success_ratio': np.nan,
             'teleop_algae_success_ratio': np.nan,
-            'climb_status': np.nan
+            'climb_status': np.nan,
+            'epa': np.nan
         })
 
-    # Compare and provide reasoning
+    # Provide reasons based on data
+    st.subheader("Reasons for Prediction")
+
+    # Visualize key metrics comparison
+    metrics_to_compare = [
+        'epa', 'total_score', 'auto_score', 'teleop_score', 'endgame_score',
+        'teleop_coral_success_ratio', 'teleop_algae_success_ratio', 'climb_status'
+    ]
+    comparison_data = pd.DataFrame({
+        'Metric': metrics_to_compare,
+        'Red Alliance': [red_metrics[metric] for metric in metrics_to_compare],
+        'Blue Alliance': [blue_metrics[metric] for metric in metrics_to_compare]
+    })
+    # Adjust for percentage metrics
+    comparison_data.loc[comparison_data['Metric'].isin(['teleop_coral_success_ratio', 'teleop_algae_success_ratio', 'climb_status']), ['Red Alliance', 'Blue Alliance']] *= 100
+    # Rename metrics for display
+    comparison_data['Metric'] = comparison_data['Metric'].map({
+        'epa': 'EPA',
+        'total_score': 'Total Score',
+        'auto_score': 'Auto Score',
+        'teleop_score': 'Teleop Score',
+        'endgame_score': 'Endgame Score',
+        'teleop_coral_success_ratio': 'Coral Success Ratio (%)',
+        'teleop_algae_success_ratio': 'Algae Success Ratio (%)',
+        'climb_status': 'Climb Rate (%)'
+    })
+    comparison_data = comparison_data.melt(id_vars='Metric', var_name='Alliance', value_name='Value')
+    fig = px.bar(
+        comparison_data,
+        x='Value',
+        y='Metric',
+        color='Alliance',
+        barmode='group',
+        title="Comparison of Red and Blue Alliance Metrics",
+        labels={'Value': 'Value', 'Metric': 'Metric'},
+        color_discrete_map={'Red Alliance': 'red', 'Blue Alliance': 'blue'}
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Detailed reasoning
     st.markdown("#### Key Factors Influencing the Prediction:")
     
+    # EPA Comparison
+    st.markdown("- **Expected Points Added (EPA)**")
+    red_epa = f"{red_metrics['epa']:.2f}" if not pd.isna(red_metrics['epa']) else "N/A"
+    blue_epa = f"{blue_metrics['epa']:.2f}" if not pd.isna(blue_metrics['epa']) else "N/A"
+    st.markdown(f"  - Red Alliance Avg EPA: {red_epa}")
+    st.markdown(f"  - Blue Alliance Avg EPA: {blue_epa}")
+    if not pd.isna(red_metrics['epa']) and not pd.isna(blue_metrics['epa']):
+        if red_metrics['epa'] > blue_metrics['epa']:
+            st.markdown("    - Red Alliance has a higher EPA, indicating a greater contribution to their alliance's score.")
+        else:
+            st.markdown("    - Blue Alliance has a higher EPA, indicating a greater contribution to their alliance's score.")
+    else:
+        st.markdown("    - Insufficient data to compare EPA.")
+
     # Total Score Comparison
     st.markdown("- **Average Total Score**")
     red_total_score = f"{red_metrics['total_score']:.2f}" if not pd.isna(red_metrics['total_score']) else "N/A"
