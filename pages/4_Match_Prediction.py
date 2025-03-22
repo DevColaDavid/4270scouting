@@ -102,28 +102,6 @@ df['teleop_algae_attempts'] = df['teleop_algae_success'] + df['teleop_algae_miss
 df['auto_algae_success_ratio'] = df['auto_algae_success'] / df['auto_algae_attempts'].replace(0, 1)
 df['teleop_algae_success_ratio'] = df['teleop_algae_success'] / df['teleop_algae_attempts'].replace(0, 1)
 
-# Calculate EPA for each team (ensure non-negative)
-def calculate_epa(df, team):
-    team = str(team)  # Ensure team is a string to match df['team_number']
-    team_data = df[df['team_number'] == team]
-    if team_data.empty:
-        return 0.0
-    epa_values = []
-    for idx, row in team_data.iterrows():
-        match_data = df[df['match_number'] == row['match_number']]
-        alliance_data = match_data[match_data['alliance_color'] == row['alliance_color']]
-        alliance_avg = alliance_data['total_score'].mean()
-        if pd.isna(alliance_avg):
-            alliance_avg = 0.0
-        team_score = row['total_score']
-        if pd.isna(team_score):
-            team_score = 0.0
-        epa = team_score - alliance_avg
-        if not pd.isna(epa):
-            epa_values.append(epa)
-    avg_epa = sum(epa_values) / len(epa_values) if epa_values else 0.0
-    return max(avg_epa, 0.0)
-
 # Team selection for prediction
 if 'team_number' in df.columns:
     # Calculate climb_stats to determine which teams have climb data
@@ -208,9 +186,24 @@ if red_alliance_teams and blue_alliance_teams:
     if blue_data.empty:
         st.warning(f"No data found for Blue Alliance teams: {blue_alliance_teams}. Metrics will be unavailable.")
 
-    # Calculate EPA for each team
-    red_team_scores = [calculate_epa(df, team) for team in red_alliance_teams]
-    blue_team_scores = [calculate_epa(df, team) for team in blue_alliance_teams]
+    # Calculate average total scores for each team (to replace EPA)
+    red_team_scores = []
+    for team in red_alliance_teams:
+        team_data = df[df['team_number'] == team]
+        if not team_data.empty:
+            avg_score = team_data['total_score'].mean()
+            red_team_scores.append(avg_score if not pd.isna(avg_score) else 0.0)
+        else:
+            red_team_scores.append(0.0)
+
+    blue_team_scores = []
+    for team in blue_alliance_teams:
+        team_data = df[df['team_number'] == team]
+        if not team_data.empty:
+            avg_score = team_data['total_score'].mean()
+            blue_team_scores.append(avg_score if not pd.isna(avg_score) else 0.0)
+        else:
+            blue_team_scores.append(0.0)
 
     # Calculate average success ratios for adjustment
     if not red_data.empty:
@@ -356,7 +349,7 @@ if red_alliance_teams and blue_alliance_teams:
 
     # Teleop Performance
     st.markdown("- **Teleop Performance**")
-    red_teleop_score = f"{red_metrics['total_score']:.2f}" if not pd.isna(red_metrics['teleop_score']) else "N/A"
+    red_teleop_score = f"{red_metrics['teleop_score']:.2f}" if not pd.isna(red_metrics['teleop_score']) else "N/A"
     blue_teleop_score = f"{blue_metrics['teleop_score']:.2f}" if not pd.isna(blue_metrics['teleop_score']) else "N/A"
     red_coral_success = f"{red_metrics['teleop_coral_success_ratio']*100:.1f}" if not pd.isna(red_metrics['teleop_coral_success_ratio']) else "N/A"
     blue_coral_success = f"{blue_metrics['teleop_coral_success_ratio']*100:.1f}" if not pd.isna(blue_metrics['teleop_coral_success_ratio']) else "N/A"

@@ -47,12 +47,12 @@ if 'form_cleared' not in st.session_state:
 # Function to get the current value of a field, considering form clearing
 def get_field_value(name, default_value):
     if st.session_state.form_cleared:
-        # Special case for team_number, match_number, alliance_color, and starting_position: default to None
-        if name in ["team_number", "match_number", "alliance_color", "starting_position"]:
+        # Special case for team_number, match_number, alliance_color, starting_position, match_outcome: default to None
+        if name in ["team_number", "match_number", "alliance_color", "starting_position", "match_outcome"]:
             return None
         return default_value
-    # Special case for team_number, match_number, alliance_color, and starting_position: default to None if not set
-    if name in ["team_number", "match_number", "alliance_color", "starting_position"] and name not in st.session_state.form_data:
+    # Special case for team_number, match_number, alliance_color, starting_position, match_outcome: default to None if not set
+    if name in ["team_number", "match_number", "alliance_color", "starting_position", "match_outcome"] and name not in st.session_state.form_data:
         return None
     return st.session_state.form_data.get(name, default_value)
 
@@ -126,13 +126,40 @@ with col2:
     form_data[name] = selected_value if selected_value is not None else None
 
 with col3:
-    for item in MATCH_INFO['basic_info'][3:]:  # Scouter Name
+    # Scouter Name
+    for item in MATCH_INFO['basic_info'][3:4]:  # Scouter Name (index 3)
         name = item['name']
         form_data[name] = st.text_input(
             item['label'],
             key=name,
             value=get_field_value(name, "")
         )
+
+    # Match Outcome
+    for item in MATCH_INFO['basic_info'][4:5]:  # Match Outcome (index 4)
+        name = item['name']
+        options = item['options']
+        current_value = get_field_value(name, None)
+        # Add None as a valid option for the selectbox
+        display_options = [None] + options
+        # Format function to display "Choose an option" when value is None
+        def format_option(value):
+            if value is None:
+                return "Choose an option"
+            return value
+        # If current_value is None, index should be 0 (None); otherwise, adjust for the None option
+        if current_value is None:
+            index = 0
+        else:
+            index = options.index(current_value) + 1  # +1 because None is at index 0
+        selected_value = st.selectbox(
+            item['label'],
+            options=display_options,
+            index=index,
+            key=name,
+            format_func=format_option
+        )
+        form_data[name] = selected_value if selected_value is not None else None
 
 # Autonomous Section
 st.subheader("Autonomous Period")
@@ -349,6 +376,8 @@ if submit_button:
         st.error("Please select an alliance color.")
     elif not form_data.get("starting_position"):
         st.error("Please select a starting position.")
+    elif not form_data.get("match_outcome"):
+        st.error("Please select the match outcome.")
     else:
         # Save data to Firestore
         success, doc_id = save_data(form_data)

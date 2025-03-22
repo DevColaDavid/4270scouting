@@ -5,18 +5,21 @@ MATCH_INFO = {
         {'name': 'match_number', 'label': 'Match Number', 'type': 'number'},
         {'name': 'alliance_color', 'label': 'Alliance', 'type': 'select', 'options': ['Red', 'Blue']},
         {'name': 'scouter_name', 'label': 'Scouter Name', 'type': 'text'},
+        # Add the new field for match outcome
+        {'name': 'match_outcome', 'label': 'Match Outcome', 'type': 'select', 'options': ['Won', 'Lost', 'Tie']}
     ],
     'starting_position': {
         'name': 'starting_position',
         'label': 'Starting Position',
-        'type': 'select',  # Changed from 'radio' to 'select' for dropdown
+        'type': 'select',
         'options': ['Left', 'Center', 'Right']
     }
 }
 
+# The rest of the file (AUTONOMOUS, TELEOP, ENDGAME, PERFORMANCE_RATINGS, ANALYSIS) remains unchanged
 AUTONOMOUS = {
     'mobility': [
-        {'name': 'auto_taxi_left', 'label': 'Taxi Auto Off the Starting Line', 'type': 'checkbox'}  # Renamed label
+        {'name': 'auto_taxi_left', 'label': 'Taxi Auto Off the Starting Line', 'type': 'checkbox'}
     ],
     'scoring': [
         {'name': 'auto_coral_l1', 'label': 'Coral Scored on L1', 'type': 'number'},
