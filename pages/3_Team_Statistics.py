@@ -284,6 +284,9 @@ if 'Losses' not in win_loss.columns:
 if 'Ties' not in win_loss.columns:
     win_loss['Ties'] = 0
 
+# Calculate the total number of matches played
+total_matches = team_data['match_number'].nunique()
+
 # Calculate primary role distribution
 if 'primary_role' in team_data.columns:
     role_distribution = team_data.groupby('team_number')['primary_role'].value_counts(normalize=True).unstack(fill_value=0) * 100
@@ -312,6 +315,7 @@ with col1:
     st.markdown(f"- **Avg Teleop Objects Scored:** {team_stats['total_teleop_objects_scored'].iloc[0]:.1f}")
 
     st.markdown("### Win/Loss Record")
+    st.markdown(f"- **Total Matches Played:** {total_matches}")
     st.markdown(f"- **Wins:** {win_loss['Wins'].iloc[0]}")
     st.markdown(f"- **Losses:** {win_loss['Losses'].iloc[0]}")
     st.markdown(f"- **Ties:** {win_loss['Ties'].iloc[0]}")
@@ -404,3 +408,25 @@ fig = px.line(
     labels={'match_number': 'Match Number', 'total_score': 'Total Score'}
 )
 st.plotly_chart(fig, use_container_width=True)
+
+# Display Q/A and Comments by Match Number
+st.subheader("Qualitative Analysis and Comments by Match")
+st.markdown("View the qualitative analysis (Q/A) and comments for each match, sorted by match number.")
+
+# Check if the required columns exist
+qa_columns = ['match_number', 'auto_qa', 'teleop_qa', 'defense_qa', 'comments']
+if all(col in team_data.columns for col in qa_columns):
+    # Select and rename columns for display
+    qa_data = team_data[qa_columns].sort_values('match_number')
+    qa_data = qa_data.rename(columns={
+        'match_number': 'Match Number',
+        'auto_qa': 'Auto Q/A',
+        'teleop_qa': 'Teleop Q/A',
+        'defense_qa': 'Defense Q/A',
+        'comments': 'Comments'
+    })
+    # Replace NaN with empty string for better display
+    qa_data = qa_data.fillna('')
+    st.dataframe(qa_data, use_container_width=True)
+else:
+    st.warning("Qualitative analysis or comments data not available for this team.")
