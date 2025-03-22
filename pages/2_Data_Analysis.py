@@ -2,7 +2,11 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from utils.utils import load_data, calculate_match_score
+import sys
+import os
+# Add the parent directory to the Python path to ensure utils can be found
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from utils.utils import load_data, calculate_match_score  # Corrected import for Scenario 2
 from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="Data Analysis", page_icon="📊", layout="wide")
@@ -45,16 +49,34 @@ required_cols = [
 ]
 
 # Calculate match scores and alliance bonuses
+score_columns = ['auto_score', 'teleop_score', 'endgame_score', 'total_score']
 if all(col in df.columns for col in required_cols):
-    df = df.join(df.apply(calculate_match_score, axis=1))
+    # Only calculate scores if they don't already exist
+    if not all(col in df.columns for col in score_columns):
+        scores = df.apply(calculate_match_score, axis=1)
+        df[score_columns] = scores
 
-    # Calculate alliance-level bonuses
     def calculate_alliance_bonuses(df):
+        # Ensure match_number and alliance_color are in the correct format
+        if 'match_number' in df.columns and 'alliance_color' in df.columns:
+            # Handle NaN values and ensure match_number is a string
+            df['match_number'] = df['match_number'].astype(str)
+            # Standardize alliance_color (e.g., to lowercase)
+            df['alliance_color'] = df['alliance_color'].fillna('unknown').str.lower()
+        else:
+            df['coop_bonus'] = 0
+            df['harmony_bonus'] = 0
+            return df
+
         # Co-op Bonus: 15 points if alliance scores 5 coral on at least 3 levels
         coral_cols = [
             'auto_coral_l1', 'auto_coral_l2', 'auto_coral_l3', 'auto_coral_l4',
             'teleop_coral_l1', 'teleop_coral_l2', 'teleop_coral_l3', 'teleop_coral_l4'
         ]
+        # Ensure all coral columns exist; fill missing ones with 0
+        for col in coral_cols:
+            if col not in df.columns:
+                df[col] = 0
         alliance_coral = df.groupby(['match_number', 'alliance_color'])[coral_cols].sum().reset_index()
         alliance_coral['l1_total'] = alliance_coral['auto_coral_l1'] + alliance_coral['teleop_coral_l1']
         alliance_coral['l2_total'] = alliance_coral['auto_coral_l2'] + alliance_coral['teleop_coral_l2']
@@ -70,25 +92,50 @@ if all(col in df.columns for col in required_cols):
             lambda x: 15 if x >= 3 else 0
         )
 
-        # Harmony Bonus: 15 points if all robots in the alliance climb (Shallow or Deep)
-        alliance_climb = df.groupby(['match_number', 'alliance_color'])['climb_status'].value_counts().unstack(fill_value=0)
-        alliance_climb['num_robots'] = df.groupby(['match_number', 'alliance_color'])['team_number'].nunique()
-        alliance_climb['num_climbs'] = alliance_climb.get('Shallow Climb', 0) + alliance_climb.get('Deep Climb', 0)
-        alliance_climb['harmony_bonus'] = alliance_climb.apply(
-            lambda row: 15 if row['num_climbs'] == row['num_robots'] and row['num_robots'] > 0 else 0, axis=1
-        )
+        # Ensure merge keys are consistent
+        alliance_coral['match_number'] = alliance_coral['match_number'].astype(str)
+        alliance_coral['alliance_color'] = alliance_coral['alliance_color'].str.lower()
 
-        # Merge bonuses back into the DataFrame
+        # Merge coop_bonus into df
         df = df.merge(
             alliance_coral[['match_number', 'alliance_color', 'coop_bonus']],
             on=['match_number', 'alliance_color'],
             how='left'
         )
+
+        # Ensure coop_bonus exists, even if merge fails
+        if 'coop_bonus' not in df.columns:
+            df['coop_bonus'] = 0
+
+        # Harmony Bonus: 15 points if all robots in the alliance climb (Shallow or Deep)
+        if 'climb_status' in df.columns:
+            alliance_climb = df.groupby(['match_number', 'alliance_color'])['climb_status'].value_counts().unstack(fill_value=0)
+            alliance_climb['num_robots'] = df.groupby(['match_number', 'alliance_color'])['team_number'].nunique()
+            alliance_climb['num_climbs'] = alliance_climb.get('Shallow Climb', 0) + alliance_climb.get('Deep Climb', 0)
+            alliance_climb['harmony_bonus'] = alliance_climb.apply(
+                lambda row: 15 if row['num_climbs'] == row['num_robots'] and row['num_robots'] > 0 else 0, axis=1
+            )
+        else:
+            alliance_climb = df.groupby(['match_number', 'alliance_color'])['team_number'].nunique()
+            alliance_climb['harmony_bonus'] = 0
+
+        # Reset the index to convert match_number and alliance_color to columns
+        alliance_climb = alliance_climb.reset_index()
+
+        # Standardize the columns after resetting the index
+        alliance_climb['match_number'] = alliance_climb['match_number'].astype(str)
+        alliance_climb['alliance_color'] = alliance_climb['alliance_color'].str.lower()
+
+        # Merge harmony_bonus into df
         df = df.merge(
-            alliance_climb[['harmony_bonus']].reset_index()[['match_number', 'alliance_color', 'harmony_bonus']],
+            alliance_climb[['match_number', 'alliance_color', 'harmony_bonus']],
             on=['match_number', 'alliance_color'],
             how='left'
         )
+
+        # Ensure harmony_bonus exists, even if merge fails
+        if 'harmony_bonus' not in df.columns:
+            df['harmony_bonus'] = 0
 
         # Add bonuses to total score
         df['total_score'] = (
@@ -101,17 +148,24 @@ if all(col in df.columns for col in required_cols):
 
     df = calculate_alliance_bonuses(df)
 
-    # Calculate EPA (retained from current version)
+    # Calculate EPA (optimized)
     def calculate_epa(df):
-        epa_values = []
-        for idx, row in df.iterrows():
-            match_data = df[df['match_number'] == row['match_number']]
-            alliance_data = match_data[match_data['alliance_color'] == row['alliance_color']]
-            alliance_avg = alliance_data['total_score'].mean()
-            team_score = row['total_score']
-            epa = team_score - alliance_avg
-            epa_values.append(epa)
-        df['epa'] = epa_values
+        if 'match_number' in df.columns and 'alliance_color' in df.columns:
+            # Ensure consistent types for grouping
+            df['match_number'] = df['match_number'].astype(str)
+            df['alliance_color'] = df['alliance_color'].str.lower()
+            alliance_avg = df.groupby(['match_number', 'alliance_color'])['total_score'].mean().reset_index()
+            alliance_avg = alliance_avg.rename(columns={'total_score': 'alliance_avg'})
+            # Merge the average back into the original DataFrame
+            alliance_avg['match_number'] = alliance_avg['match_number'].astype(str)
+            alliance_avg['alliance_color'] = alliance_avg['alliance_color'].str.lower()
+            df = df.merge(alliance_avg, on=['match_number', 'alliance_color'], how='left')
+            # Calculate EPA as team score minus alliance average
+            df['epa'] = df['total_score'] - df['alliance_avg']
+            # Drop the temporary column
+            df = df.drop(columns=['alliance_avg'])
+        else:
+            df['epa'] = 0
         return df
 
     df = calculate_epa(df)
@@ -128,6 +182,94 @@ if 'team_number' in df.columns:
 else:
     st.error("Team number data not available.")
     st.stop()
+
+# Calculate success ratios (needed for leaderboard and scoring accuracy analysis)
+coral_scored_cols = [f"{period}_coral_l{level}" for period in ['auto', 'teleop'] for level in range(1, 5)]
+coral_missed_cols = [f"{period}_missed_coral_l{level}" for period in ['auto', 'teleop'] for level in range(1, 5)]
+df['total_coral_scored'] = df[coral_scored_cols].sum(axis=1)
+df['total_coral_missed'] = df[coral_missed_cols].sum(axis=1)
+df['total_coral_attempts'] = df['total_coral_scored'] + df['total_coral_missed']
+df['coral_success_ratio'] = (df['total_coral_scored'] / df['total_coral_attempts'].replace(0, pd.NA)).fillna(0)
+
+algae_scored_cols = [f"{period}_algae_{target}" for period in ['auto', 'teleop'] for target in ['barge', 'processor']]
+algae_missed_cols = [f"{period}_missed_algae_{target}" for period in ['auto', 'teleop'] for target in ['barge', 'processor']]
+df['total_algae_scored'] = df[algae_scored_cols].sum(axis=1)
+df['total_algae_missed'] = df[algae_missed_cols].sum(axis=1)
+df['total_algae_attempts'] = df['total_algae_scored'] + df['total_algae_missed']
+df['algae_success_ratio'] = (df['total_algae_scored'] / df['total_algae_attempts'].replace(0, pd.NA)).fillna(0)
+
+# Team Leaderboard
+st.subheader("🏆 Team Leaderboard")
+st.markdown("Teams ranked based on performance metrics. Select a metric to sort the table.")
+
+# Calculate all metrics for the leaderboard
+leaderboard_data = df.groupby('team_number').agg({
+    'total_score': 'mean',           # Average Total Score
+    'epa': 'mean',                   # Average EPA
+    'coral_success_ratio': 'mean',   # Average Coral Success Ratio
+    'algae_success_ratio': 'mean'    # Average Algae Success Ratio
+}).reset_index()
+
+# Convert success ratios to percentages
+leaderboard_data['coral_success_ratio'] = leaderboard_data['coral_success_ratio'] * 100
+leaderboard_data['algae_success_ratio'] = leaderboard_data['algae_success_ratio'] * 100
+
+# Rename columns for display
+leaderboard_data = leaderboard_data.rename(columns={
+    'team_number': 'Team Number',
+    'total_score': 'Average Total Score',
+    'epa': 'Average EPA',
+    'coral_success_ratio': 'Coral Success Ratio (%)',
+    'algae_success_ratio': 'Algae Success Ratio (%)'
+})
+
+# Dropdown to select the sorting metric
+sort_metric = st.selectbox(
+    "Sort Leaderboard By",
+    options=[
+        "Average Total Score",
+        "Average EPA",
+        "Coral Success Ratio (%)",
+        "Algae Success Ratio (%)"
+    ],
+    index=0  # Default to Average Total Score
+)
+
+# Map the display name back to the DataFrame column name for sorting
+sort_column_map = {
+    "Average Total Score": "Average Total Score",
+    "Average EPA": "Average EPA",
+    "Coral Success Ratio (%)": "Coral Success Ratio (%)",
+    "Algae Success Ratio (%)": "Algae Success Ratio (%)"
+}
+
+# Sort the leaderboard based on the selected metric
+leaderboard_data = leaderboard_data.sort_values(by=sort_column_map[sort_metric], ascending=False)
+
+# Add rank based on the sorting metric, handle NaN values
+ranks = leaderboard_data[sort_column_map[sort_metric]].rank(ascending=False, method='min')
+# Fill NaN ranks with the maximum rank + 1 (or another default value)
+max_rank = ranks.max() if not ranks.isna().all() else 0
+leaderboard_data['Rank'] = ranks.fillna(max_rank + 1).astype(int)
+
+# Reorder columns to put Rank first
+leaderboard_data = leaderboard_data[[
+    'Rank', 'Team Number', 'Average Total Score', 'Average EPA',
+    'Coral Success Ratio (%)', 'Algae Success Ratio (%)'
+]]
+
+# Round the values for better readability
+leaderboard_data['Average Total Score'] = leaderboard_data['Average Total Score'].round(2)
+leaderboard_data['Average EPA'] = leaderboard_data['Average EPA'].round(2)
+leaderboard_data['Coral Success Ratio (%)'] = leaderboard_data['Coral Success Ratio (%)'].round(2)
+leaderboard_data['Algae Success Ratio (%)'] = leaderboard_data['Algae Success Ratio (%)'].round(2)
+
+# Display the leaderboard
+st.dataframe(
+    leaderboard_data,
+    use_container_width=True,
+    hide_index=True
+)
 
 # Total Score Analysis
 st.subheader("Total Score Analysis")
@@ -387,24 +529,9 @@ if 'auto_taxi_left' in df.columns:
 else:
     st.warning("Taxi data not available for visualization.")
 
-# Scoring Accuracy Analysis (retained from current version)
+# Scoring Accuracy Analysis
 st.subheader("Scoring Accuracy Analysis")
-# Coral Success Ratio
-coral_scored_cols = [f"{period}_coral_l{level}" for period in ['auto', 'teleop'] for level in range(1, 5)]
-coral_missed_cols = [f"{period}_missed_coral_l{level}" for period in ['auto', 'teleop'] for level in range(1, 5)]
-df['total_coral_scored'] = df[coral_scored_cols].sum(axis=1)
-df['total_coral_missed'] = df[coral_missed_cols].sum(axis=1)
-df['total_coral_attempts'] = df['total_coral_scored'] + df['total_coral_missed']
-df['coral_success_ratio'] = df['total_coral_scored'] / df['total_coral_attempts'].replace(0, pd.NA)
 avg_coral_success = df.groupby('team_number')['coral_success_ratio'].mean() * 100
-
-# Algae Success Ratio
-algae_scored_cols = [f"{period}_algae_{target}" for period in ['auto', 'teleop'] for target in ['barge', 'processor']]
-algae_missed_cols = [f"{period}_missed_algae_{target}" for period in ['auto', 'teleop'] for target in ['barge', 'processor']]
-df['total_algae_scored'] = df[algae_scored_cols].sum(axis=1)
-df['total_algae_missed'] = df[algae_missed_cols].sum(axis=1)
-df['total_algae_attempts'] = df['total_algae_scored'] + df['total_algae_missed']
-df['algae_success_ratio'] = df['total_algae_scored'] / df['total_algae_attempts'].replace(0, pd.NA)
 avg_algae_success = df.groupby('team_number')['algae_success_ratio'].mean() * 100
 
 # Plot success ratios

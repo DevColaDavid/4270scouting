@@ -58,10 +58,13 @@ def display_recent_matches():
                 'teleop_algae_barge', 'teleop_algae_processor', 'teleop_algae_removed',
                 'climb_status', 'auto_taxi_left'
             ]
+            score_columns = ['auto_score', 'teleop_score', 'endgame_score', 'total_score']
             if all(col in df.columns for col in required_columns):
-                df = df.join(df.apply(calculate_match_score, axis=1))
+                # Only calculate scores if they don't already exist
+                if not all(col in df.columns for col in score_columns):
+                    scores = df.apply(calculate_match_score, axis=1)
+                    df[score_columns] = scores
             else:
-                # If scores can't be calculated, proceed without them
                 st.warning("Match scores not calculated due to missing data.")
 
             # Sort by timestamp (if available) to get the most recent responses
@@ -101,10 +104,13 @@ def display_quick_stats():
                 'teleop_algae_barge', 'teleop_algae_processor', 'teleop_algae_removed',
                 'climb_status', 'auto_taxi_left'
             ]
+            score_columns = ['auto_score', 'teleop_score', 'endgame_score', 'total_score']
             if all(col in df.columns for col in required_columns):
-                df = df.join(df.apply(calculate_match_score, axis=1))
+                # Only calculate scores if they don't already exist
+                if not all(col in df.columns for col in score_columns):
+                    scores = df.apply(calculate_match_score, axis=1)
+                    df[score_columns] = scores
             else:
-                # If scores can't be calculated, proceed without them
                 st.warning("Match scores not calculated due to missing data.")
 
             st.subheader("Quick Stats")

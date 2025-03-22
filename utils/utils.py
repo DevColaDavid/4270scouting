@@ -1,14 +1,17 @@
+# utils/utils.py
 import os
 import pandas as pd
 from datetime import datetime
 import streamlit as st
 from google.cloud import firestore
 from google.oauth2 import service_account
+import sys
 
 db = None
 COLLECTION_NAME = "scouting_data"
 
 def initialize_firestore():
+    """Initialize the Firestore client using Streamlit secrets or a local key file."""
     global db
     if db is not None:
         return None
@@ -26,6 +29,7 @@ def initialize_firestore():
         return f"Error initializing Firestore: {str(e)}"
 
 def save_data(match_data):
+    """Save match data to Firestore with a unique document ID."""
     try:
         error = initialize_firestore()
         if error:
@@ -71,6 +75,7 @@ def save_data(match_data):
         return False, str(e)
 
 def load_data():
+    """Load data from Firestore and return it as a pandas DataFrame."""
     try:
         error = initialize_firestore()
         if error:
@@ -108,45 +113,48 @@ def load_data():
 
 def calculate_match_score(row):
     """
-    Calculate the match score for a single team's performance in FRC 2025 REEFSCAPE.
-    Returns a Series with auto_score, teleop_score, endgame_score, and total_score.
-    Note: Alliance-level bonuses (co-op bonus, harmony bonus) are calculated separately.
+    Calculate the match score for a single row of data.
+    
+    Scoring Rules:
+    - Autonomous:
+        - Coral: Level 1 = 2 points, Level 2 = 4 points, Level 3 = 6 points, Level 4 = 8 points
+        - Algae: Barge = 2 points, Processor = 3 points, Removed = 1 point
+        - Taxi: 2 points if auto_taxi_left is True
+    - Teleop:
+        - Coral: Level 1 = 1 point, Level 2 = 2 points, Level 3 = 3 points, Level 4 = 4 points
+        - Algae: Barge = 1 point, Processor = 2 points, Removed = 1 point
+    - Endgame (based on climb_status):
+        - None: 0 points
+        - Parked: 5 points
+        - Shallow Climb: 10 points
+        - Deep Climb: 20 points
     """
-    # Autonomous Period
-    auto_score = (
-        (row['auto_coral_l1'] * 3) +    # Level 1 coral: 3 points each
-        (row['auto_coral_l2'] * 5) +    # Level 2 coral: 5 points each
-        (row['auto_coral_l3'] * 8) +    # Level 3 coral: 8 points each
-        (row['auto_coral_l4'] * 12) +   # Level 4 coral: 12 points each
-        (row['auto_algae_barge'] * 4) + # Algae to barge: 4 points each
-        (row['auto_algae_processor'] * 6) +  # Algae to processor: 6 points each
-        (row['auto_algae_removed'] * 2)  # Algae removed: 2 points each
-    )
-    # Taxi points
-    if row['auto_taxi_left']:
-        auto_score += 4  # 4 points for leaving starting position
-
-    # Teleop Period
-    teleop_score = (
-        (row['teleop_coral_l1'] * 1) +  # Level 1 coral: 1 point each
-        (row['teleop_coral_l2'] * 2) +  # Level 2 coral: 2 points each
-        (row['teleop_coral_l3'] * 4) +  # Level 3 coral: 4 points each
-        (row['teleop_coral_l4'] * 6) +  # Level 4 coral: 6 points each
-        (row['teleop_algae_barge'] * 2) +  # Algae to barge: 2 points each
-        (row['teleop_algae_processor'] * 6) +  # Algae to processor: 6 points each
-        (row['teleop_algae_removed'] * 1)  # Algae removed: 1 point each
-    )
-
-    # Endgame Score (interpreted as attaching to the barge)
+    # Initialize scores
+    auto_score = 0
+    teleop_score = 0
     endgame_score = 0
-    if row['climb_status'] == 'Parked':
-        endgame_score = 3  # 3 points for parking
-    elif row['climb_status'] == 'Shallow Climb':
-        endgame_score = 6  # 6 points for shallow climb
-    elif row['climb_status'] == 'Deep Climb':
-        endgame_score = 12  # 12 points for deep climb
 
-    # Calculate total score before alliance-level bonuses
+    # Auto score
+    auto_score += row['auto_coral_l1'] * 2 + row['auto_coral_l2'] * 4 + row['auto_coral_l3'] * 6 + row['auto_coral_l4'] * 8
+    auto_score += row['auto_algae_barge'] * 2 + row['auto_algae_processor'] * 3 + row['auto_algae_removed'] * 1
+    if row['auto_taxi_left']:
+        auto_score += 2
+
+    # Teleop score
+    teleop_score += row['teleop_coral_l1'] * 1 + row['teleop_coral_l2'] * 2 + row['teleop_coral_l3'] * 3 + row['teleop_coral_l4'] * 4
+    teleop_score += row['teleop_algae_barge'] * 1 + row['teleop_algae_processor'] * 2 + row['teleop_algae_removed'] * 1
+
+    # Endgame score
+    if row['climb_status'] == 'Parked':
+        endgame_score = 5
+    elif row['climb_status'] == 'Shallow Climb':
+        endgame_score = 10
+    elif row['climb_status'] == 'Deep Climb':
+        endgame_score = 20
+    else:  # 'None' or any other value
+        endgame_score = 0
+
+    # Calculate total score (without alliance bonuses, which are added in 2_Data_Analysis.py)
     total_score = auto_score + teleop_score + endgame_score
 
     return pd.Series({
@@ -157,6 +165,7 @@ def calculate_match_score(row):
     })
 
 def calculate_epa(df, team_number):
+    """Calculate the Expected Points Added (EPA) for a team based on their average total score."""
     if df.empty or 'total_score' not in df.columns:
         return 0.0
     team_data = df[df['team_number'] == team_number]
