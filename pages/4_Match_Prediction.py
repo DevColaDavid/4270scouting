@@ -15,6 +15,9 @@ if df is None or df.empty:
     st.info("No match data available for prediction.")
     st.stop()
 
+# Convert team_number to string to ensure consistency
+df['team_number'] = df['team_number'].astype(str)
+
 # Define required columns for scoring
 required_cols = [
     'auto_coral_l1', 'auto_coral_l2', 'auto_coral_l3', 'auto_coral_l4',
@@ -101,6 +104,7 @@ df['teleop_algae_success_ratio'] = df['teleop_algae_success'] / df['teleop_algae
 
 # Calculate EPA for each team (ensure non-negative)
 def calculate_epa(df, team):
+    team = str(team)  # Ensure team is a string to match df['team_number']
     team_data = df[df['team_number'] == team]
     if team_data.empty:
         return 0.0
@@ -169,7 +173,6 @@ if red_alliance_teams and blue_alliance_teams:
         # Check for missing teams
         missing_teams = [team for team in alliance_teams_converted if team not in climb_stats.index]
         if missing_teams:
-            # Instead of warning, handle gracefully
             present_teams = [team for team in alliance_teams_converted if team in climb_stats.index]
             harmony_bonus_prob = climb_stats.loc[present_teams, 'climb_prob'].prod() if present_teams else 0
         else:
@@ -198,6 +201,12 @@ if red_alliance_teams and blue_alliance_teams:
     # Split data by alliance
     red_data = df[df['team_number'].isin(red_alliance_teams)]
     blue_data = df[df['team_number'].isin(blue_alliance_teams)]
+
+    # Debug: Check if red_data and blue_data are empty
+    if red_data.empty:
+        st.warning(f"No data found for Red Alliance teams: {red_alliance_teams}. Metrics will be unavailable.")
+    if blue_data.empty:
+        st.warning(f"No data found for Blue Alliance teams: {blue_alliance_teams}. Metrics will be unavailable.")
 
     # Calculate EPA for each team
     red_team_scores = [calculate_epa(df, team) for team in red_alliance_teams]
@@ -272,25 +281,47 @@ if red_alliance_teams and blue_alliance_teams:
     st.subheader("Reasons for Prediction")
     
     # Calculate key metrics for each alliance
-    red_metrics = red_data.groupby('team_number').agg({
-        'total_score': 'mean',
-        'auto_score': 'mean',
-        'teleop_score': 'mean',
-        'endgame_score': 'mean',
-        'teleop_coral_success_ratio': 'mean',
-        'teleop_algae_success_ratio': 'mean',
-        'climb_status': lambda x: ((x == 'Shallow Climb') | (x == 'Deep Climb')).mean() * 100
-    }).mean()
+    if not red_data.empty:
+        red_metrics = red_data.groupby('team_number').agg({
+            'total_score': 'mean',
+            'auto_score': 'mean',
+            'teleop_score': 'mean',
+            'endgame_score': 'mean',
+            'teleop_coral_success_ratio': 'mean',
+            'teleop_algae_success_ratio': 'mean',
+            'climb_status': lambda x: ((x == 'Shallow Climb') | (x == 'Deep Climb')).mean() * 100
+        }).mean()
+    else:
+        red_metrics = pd.Series({
+            'total_score': np.nan,
+            'auto_score': np.nan,
+            'teleop_score': np.nan,
+            'endgame_score': np.nan,
+            'teleop_coral_success_ratio': np.nan,
+            'teleop_algae_success_ratio': np.nan,
+            'climb_status': np.nan
+        })
 
-    blue_metrics = blue_data.groupby('team_number').agg({
-        'total_score': 'mean',
-        'auto_score': 'mean',
-        'teleop_score': 'mean',
-        'endgame_score': 'mean',
-        'teleop_coral_success_ratio': 'mean',
-        'teleop_algae_success_ratio': 'mean',
-        'climb_status': lambda x: ((x == 'Shallow Climb') | (x == 'Deep Climb')).mean() * 100
-    }).mean()
+    if not blue_data.empty:
+        blue_metrics = blue_data.groupby('team_number').agg({
+            'total_score': 'mean',
+            'auto_score': 'mean',
+            'teleop_score': 'mean',
+            'endgame_score': 'mean',
+            'teleop_coral_success_ratio': 'mean',
+            'teleop_algae_success_ratio': 'mean',
+            'climb_status': lambda x: ((x == 'Shallow Climb') | (x == 'Deep Climb')).mean() * 100
+        }).mean()
+    else:
+        blue_metrics = pd.Series({
+            'total_score': np.nan,
+            'auto_score': np.nan,
+            'teleop_score': np.nan,
+            'endgame_score': np.nan,
+            'teleop_coral_success_ratio': np.nan,
+            'teleop_algae_success_ratio': np.nan,
+            'climb_status': np.nan
+        })
 
     # Compare and provide reasoning
     st.markdown("#### Key Factors Influencing the Prediction:")
@@ -325,7 +356,7 @@ if red_alliance_teams and blue_alliance_teams:
 
     # Teleop Performance
     st.markdown("- **Teleop Performance**")
-    red_teleop_score = f"{red_metrics['teleop_score']:.2f}" if not pd.isna(red_metrics['teleop_score']) else "N/A"
+    red_teleop_score = f"{red_metrics['total_score']:.2f}" if not pd.isna(red_metrics['teleop_score']) else "N/A"
     blue_teleop_score = f"{blue_metrics['teleop_score']:.2f}" if not pd.isna(blue_metrics['teleop_score']) else "N/A"
     red_coral_success = f"{red_metrics['teleop_coral_success_ratio']*100:.1f}" if not pd.isna(red_metrics['teleop_coral_success_ratio']) else "N/A"
     blue_coral_success = f"{blue_metrics['teleop_coral_success_ratio']*100:.1f}" if not pd.isna(blue_metrics['teleop_coral_success_ratio']) else "N/A"
