@@ -258,9 +258,6 @@ team_stats['total_objects_scored'] = (
 # Clean the climb_status data by converting to title case
 team_data['climb_status'] = team_data['climb_status'].str.title()
 
-# Debug: Display the raw climb_status values for the selected team
-st.write(f"Raw climb_status values for Team {selected_team}:", team_data['climb_status'].value_counts().to_dict())
-
 # Map climb_status to simplified categories for the pie chart
 team_data['climb_category'] = team_data['climb_status'].map({
     'Shallow Climb': 'Shallow Climb',
@@ -268,9 +265,6 @@ team_data['climb_category'] = team_data['climb_status'].map({
     'None': 'No Climb',
     'Parked': 'No Climb'
 }).fillna('No Climb')  # Default to 'No Climb' for unmapped values
-
-# Debug: Display the mapped climb_category values
-st.write(f"Mapped climb_category values for Team {selected_team}:", team_data['climb_category'].value_counts().to_dict())
 
 # Calculate climb statistics
 climb_stats = team_data.groupby('team_number')['climb_category'].value_counts(normalize=True).unstack(fill_value=0) * 100
