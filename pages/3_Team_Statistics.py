@@ -146,6 +146,20 @@ else:
     st.warning("Cannot calculate match scores. Missing required columns.")
     st.stop()
 
+# Check for duplicates in the data (same team_number and match_number)
+duplicates = df[df.duplicated(subset=['team_number', 'match_number'], keep=False)]
+if not duplicates.empty:
+    st.warning("Duplicate form submissions detected for the same team and match number:")
+    st.write(duplicates[['team_number', 'match_number', 'alliance_color', 'total_score']])
+    # Deduplicate by keeping the first submission (or use timestamp if available)
+    if 'timestamp' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+        df = df.sort_values(by=['team_number', 'match_number', 'timestamp']).drop_duplicates(subset=['team_number', 'match_number'], keep='last')
+        st.info("Duplicates resolved by keeping the most recent submission based on timestamp.")
+    else:
+        df = df.drop_duplicates(subset=['team_number', 'match_number'], keep='first')
+        st.info("Duplicates resolved by keeping the first submission. Consider adding a timestamp column to prioritize more recent submissions.")
+
 # Calculate success ratios and additional metrics
 df['auto_coral_success'] = df['auto_coral_l1'] + df['auto_coral_l2'] + df['auto_coral_l3'] + df['auto_coral_l4']
 df['auto_coral_missed'] = df['auto_missed_coral_l1'] + df['auto_missed_coral_l2'] + df['auto_missed_coral_l3'] + df['auto_missed_coral_l4']
@@ -259,6 +273,12 @@ if team_data.empty:
     st.info(f"No data available for team {selected_team}.")
     st.stop()
 
+# Check for duplicates in team_data (already handled globally, but let's confirm)
+team_duplicates = team_data[team_data.duplicated(subset=['match_number'], keep=False)]
+if not team_duplicates.empty:
+    st.warning(f"Duplicate match numbers found for Team {selected_team}:")
+    st.write(team_duplicates[['match_number', 'alliance_color', 'total_score']])
+
 # Calculate team statistics with additional metrics
 team_stats = team_data.groupby('team_number').agg({
     'total_score': 'mean',
@@ -339,8 +359,10 @@ for status in ['Shallow Climb', 'Deep Climb', 'No Climb']:
     if status not in climb_stats.columns:
         climb_stats[status] = 0
 
-# Calculate win/loss/tie record using the final match outcome
-win_loss = team_data.groupby('team_number')['match_outcome_final'].value_counts().unstack(fill_value=0).reset_index()
+# Calculate win/loss/tie record using the final match outcome on deduplicated data
+# Ensure team_data is deduplicated for win/loss calculation
+win_loss_data = team_data.drop_duplicates(subset=['match_number'])
+win_loss = win_loss_data.groupby('team_number')['match_outcome_final'].value_counts().unstack(fill_value=0).reset_index()
 win_loss = win_loss.rename(columns={'Won': 'Wins', 'Lost': 'Losses', 'Tie': 'Ties'})
 if 'Wins' not in win_loss.columns:
     win_loss['Wins'] = 0
@@ -402,7 +424,7 @@ with col2:
     st.markdown(f"- **Avg Scored on L2:** {team_stats['teleop_coral_l2'].iloc[0]:.1f}")
     st.markdown(f"- **Avg Missed on L2:** {team_stats['teleop_missed_coral_l2'].iloc[0]:.1f}")
     st.markdown(f"- **Avg Scored on L3:** {team_stats['teleop_coral_l3'].iloc[0]:.1f}")
-    st.markdown(f"- **Avg Missed on L3:** {team_stats['teleop_missed_coral_l3'].iloc[0]:.1f}")
+    st.markdown(f"- **Avg Missed on L3:** {team_stats['teleop_missed_coral_l4'].iloc[0]:.1f}")
     st.markdown(f"- **Avg Scored on L4:** {team_stats['teleop_coral_l4'].iloc[0]:.1f}")
     st.markdown(f"- **Avg Missed on L4:** {team_stats['teleop_missed_coral_l4'].iloc[0]:.1f}")
     st.markdown(f"- **Total Teleop Coral Scored:** {team_stats['teleop_coral_success'].iloc[0]:.1f}")

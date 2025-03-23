@@ -165,14 +165,69 @@ with tabs[0]:
     st.subheader("View Match Data")
     match_data = fetch_match_data()
     if not match_data.empty:
-        # Display all columns except doc_id
-        display_columns = [col for col in match_data.columns if col != 'doc_id']
-        # Sort columns for better readability (optional)
-        display_columns = sorted(display_columns)
-        st.dataframe(match_data[display_columns], use_container_width=True)
+        # Define the desired column order based on the scouting form
+        desired_columns = [
+            # Metadata (if timestamp exists)
+            'timestamp',
+            # Match Information
+            'team_number',
+            'match_number',
+            'alliance_color',
+            'starting_position',
+            'scouter_name',
+            # Match Outcome
+            'match_outcome',
+            # Autonomous Period
+            'auto_taxi_left',
+            'auto_coral_l1',
+            'auto_coral_l2',
+            'auto_coral_l3',
+            'auto_coral_l4',
+            'auto_missed_coral_l1',
+            'auto_missed_coral_l2',
+            'auto_missed_coral_l3',
+            'auto_missed_coral_l4',
+            'auto_algae_barge',
+            'auto_algae_processor',
+            'auto_missed_algae_barge',
+            'auto_missed_algae_processor',
+            'auto_algae_removed',
+            # Teleop Period
+            'teleop_coral_l1',
+            'teleop_coral_l2',
+            'teleop_coral_l3',
+            'teleop_coral_l4',
+            'teleop_missed_coral_l1',
+            'teleop_missed_coral_l2',
+            'teleop_missed_coral_l3',
+            'teleop_missed_coral_l4',
+            'teleop_algae_barge',
+            'teleop_algae_processor',
+            'teleop_missed_algae_barge',
+            'teleop_missed_algae_processor',
+            'teleop_algae_removed',
+            # Endgame
+            'climb_status',
+            # Performance Ratings
+            'defense_rating',
+            'speed_rating',
+            'driver_skill_rating',
+            # Strategy
+            'primary_role',
+            # Qualitative Analysis
+            'defense_qa',
+            'teleop_qa',
+            'auto_qa',
+            'comments'
+        ]
+        # Filter desired columns to only include those present in match_data, excluding 'doc_id'
+        display_columns = [col for col in desired_columns if col in match_data.columns and col != 'doc_id']
+        # Reorder the DataFrame columns
+        match_data_display = match_data[display_columns]
+        st.dataframe(match_data_display, use_container_width=True)
 
         # Add a download button for the data as CSV
-        csv = match_data[display_columns].to_csv(index=False)
+        csv = match_data_display.to_csv(index=False)
         st.download_button(
             label="Download Data as CSV",
             data=csv,
