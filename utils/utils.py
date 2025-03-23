@@ -125,9 +125,9 @@ def calculate_match_score(row):
         - Algae: Barge = 1 point, Processor = 2 points, Removed = 1 point
     - Endgame (based on climb_status):
         - None: 0 points
-        - Parked: 5 points
-        - Shallow Climb: 10 points
-        - Deep Climb: 20 points
+        - Parked: 2 points
+        - Shallow Climb: 6 points
+        - Deep Climb: 12 points
     """
     # Initialize scores
     auto_score = 0
@@ -146,11 +146,11 @@ def calculate_match_score(row):
 
     # Endgame score
     if row['climb_status'] == 'Parked':
-        endgame_score = 5
+        endgame_score = 2
     elif row['climb_status'] == 'Shallow Climb':
-        endgame_score = 10
+        endgame_score = 6
     elif row['climb_status'] == 'Deep Climb':
-        endgame_score = 20
+        endgame_score = 12
     else:  # 'None' or any other value
         endgame_score = 0
 
