@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go  # Added for radar chart
 from utils.utils import load_data, calculate_match_score
 
 st.set_page_config(page_title="Team Statistics", page_icon="📊", layout="wide")
@@ -8,11 +10,15 @@ st.set_page_config(page_title="Team Statistics", page_icon="📊", layout="wide"
 st.title("📊 Team Statistics")
 st.markdown("View detailed statistics for each team based on historical scouting data.")
 
-# Load data
-df = load_data()
+# Load data with error handling
+try:
+    df = load_data()
+except Exception as e:
+    st.error(f"Failed to load data: {str(e)}")
+    st.stop()
 
 if df is None or df.empty:
-    st.info("No match data available to display team statistics.")
+    st.info("No match data available to display team statistics. Please upload data in the Data Upload page.")
     st.stop()
 
 # Ensure numeric columns are properly typed
@@ -28,10 +34,14 @@ numeric_cols = [
 ]
 for col in numeric_cols:
     if col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
 # Convert team_number to string to ensure consistency
-df['team_number'] = df['team_number'].astype(str)
+if 'team_number' in df.columns:
+    df['team_number'] = df['team_number'].astype(str)
+else:
+    st.error("Required column 'team_number' is missing in the data.")
+    st.stop()
 
 # Define required columns for scoring
 required_cols = [
@@ -121,7 +131,8 @@ if all(col in df.columns for col in required_cols):
 
     df = calculate_alliance_bonuses(df)
 else:
-    st.warning("Cannot calculate match scores. Missing required columns.")
+    st.warning("Cannot calculate match scores. Missing required columns: " +
+               ", ".join([col for col in required_cols if col not in df.columns]))
     st.stop()
 
 # Check for duplicates
@@ -235,7 +246,7 @@ if not team_duplicates.empty:
     st.warning(f"Duplicate match numbers found for Team {selected_team}:")
     st.write(team_duplicates[['match_number', 'alliance_color', 'total_score']])
 
-# Calculate team statistics with both averages and totals
+# Calculate team statistics with both averages and totals, including ratings
 team_stats = team_data.groupby('team_number').agg({
     'total_score': 'mean',
     'auto_score': 'mean',
@@ -275,6 +286,9 @@ team_stats = team_data.groupby('team_number').agg({
     'teleop_coral_success_ratio': 'mean',
     'auto_algae_success_ratio': 'mean',
     'teleop_algae_success_ratio': 'mean',
+    'defense_rating': 'mean',  # Added
+    'speed_rating': 'mean',    # Added
+    'driver_skill_rating': 'mean'  # Added
 }).reset_index()
 
 # Flatten the multi-index columns
@@ -350,6 +364,9 @@ team_stats = team_stats.rename(columns={
     'teleop_coral_success_ratio_mean': 'avg_teleop_coral_success_ratio',
     'auto_algae_success_ratio_mean': 'avg_auto_algae_success_ratio',
     'teleop_algae_success_ratio_mean': 'avg_teleop_algae_success_ratio',
+    'defense_rating_mean': 'avg_defense_rating',  # Added
+    'speed_rating_mean': 'avg_speed_rating',      # Added
+    'driver_skill_rating_mean': 'avg_driver_skill_rating'  # Added
 })
 
 # Fill NaN values with 0
@@ -414,7 +431,8 @@ st.subheader(f"Statistics for Team {selected_team}")
 # Add some vertical spacing
 st.markdown("<br>", unsafe_allow_html=True)
 
-col1, col2, col3 = st.columns(3)
+# Create four columns: three for existing stats, one for the radar chart
+col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
 with col1:
     st.markdown("### Scoring Statistics")
@@ -508,7 +526,50 @@ with col3:
     st.markdown(f"- <span style='color:#ADD8E6'>**Avg Removed from Reef:** {team_stats['avg_teleop_algae_removed'].iloc[0]:.1f}</span>", unsafe_allow_html=True)
     st.markdown(f"- <span style='color:#90EE90'>**Total Removed from Reef:** {team_stats['total_teleop_algae_removed'].iloc[0]:.0f}</span>", unsafe_allow_html=True)
     st.markdown(f"- <span style='color:#FFA500'>**Teleop Algae Success Ratio:** {team_stats['avg_teleop_algae_success_ratio'].iloc[0]*100:.1f}%</span>", unsafe_allow_html=True)
-    
+
+with col4:
+    st.markdown("### Team Ratings")
+    # Display the average ratings as text
+    st.markdown(f"- <span style='color:#ADD8E6'>**Avg Defense Rating:** {team_stats['avg_defense_rating'].iloc[0]:.1f}</span>", unsafe_allow_html=True)
+    st.markdown(f"- <span style='color:#ADD8E6'>**Avg Speed Rating:** {team_stats['avg_speed_rating'].iloc[0]:.1f}</span>", unsafe_allow_html=True)
+    st.markdown(f"- <span style='color:#ADD8E6'>**Avg Driver Skill Rating:** {team_stats['avg_driver_skill_rating'].iloc[0]:.1f}</span>", unsafe_allow_html=True)
+
+    # Create the radar chart
+    categories = ['Defense', 'Speed', 'Driver Skill', 'Defense']  # Repeat the first category to close the loop
+    values = [
+        team_stats['avg_defense_rating'].iloc[0],
+        team_stats['avg_speed_rating'].iloc[0],
+        team_stats['avg_driver_skill_rating'].iloc[0],
+        team_stats['avg_defense_rating'].iloc[0]  # Repeat the first value to close the loop
+    ]
+
+    # Check if all ratings are non-zero to avoid a flat chart
+    if sum(values[:-1]) > 0:  # Exclude the repeated value for the check
+        fig_radar = go.Figure()
+        fig_radar.add_trace(go.Scatterpolar(
+            r=values,
+            theta=categories,
+            fill='toself',
+            name=f'Team {selected_team}',
+            line=dict(color='deepskyblue'),
+            fillcolor='rgba(0, 191, 255, 0.3)'
+        ))
+        fig_radar.update_layout(
+            polar=dict(
+                radialaxis=dict(
+                    visible=True,
+                    range=[0, 5],  # Ratings are from 1 to 5
+                    tickvals=[1, 2, 3, 4, 5]
+                )
+            ),
+            showlegend=False,
+            title=f"Team {selected_team} Performance Ratings",
+            margin=dict(l=50, r=50, t=50, b=50)
+        )
+        st.plotly_chart(fig_radar, use_container_width=True)
+    else:
+        st.write("No rating data available to display radar chart.")
+
 # Display climb and strategy distribution
 st.subheader("Climb and Strategy Distribution")
 col1, col2 = st.columns(2)
