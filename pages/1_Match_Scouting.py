@@ -4,7 +4,7 @@ from utils.utils import save_data
 
 st.set_page_config(page_title="Match Scouting", page_icon="📝", layout="wide")
 
-# Custom CSS for better styling
+# Custom CSS for button styling only
 st.markdown("""
     <style>
     .stNumberInput, .stTextInput, .stSelectbox, .stCheckbox, .stSlider, .stTextArea {
@@ -47,8 +47,11 @@ if 'form_cleared' not in st.session_state:
 # Function to get the current value of a field, considering form clearing
 def get_field_value(name, default_value):
     if st.session_state.form_cleared:
-        # Special case for team_number, match_number, alliance_color, starting_position, match_outcome, primary_role: default to None
-        if name in ["team_number", "match_number", "alliance_color", "starting_position", "match_outcome", "primary_role"]:
+        # Preserve scouter_name and alliance_color
+        if name in ["scouter_name", "alliance_color"]:
+            return st.session_state.form_data.get(name, default_value)
+        # Special case for team_number, match_number, starting_position, match_outcome, primary_role: default to None
+        if name in ["team_number", "match_number", "starting_position", "match_outcome", "primary_role"]:
             return None
         return default_value
     # Special case for team_number, match_number, alliance_color, starting_position, match_outcome, primary_role: default to None if not set
@@ -56,21 +59,27 @@ def get_field_value(name, default_value):
         return None
     return st.session_state.form_data.get(name, default_value)
 
+# Callback function to update session state when a number input changes
+def update_number_input(name):
+    st.session_state.form_data[name] = st.session_state[name]
+
 # Form data dictionary to store the current values
 form_data = {}
 
-# Match Info Section
-st.subheader("Match Information")
+# Match Info Section (Blue: #007BFF)
+st.markdown('<div style="color: #007BFF; font-size: 24px; font-weight: bold; margin-bottom: 10px">Match Information</div>', unsafe_allow_html=True)
 col1, col2, col3 = st.columns(3)
 with col1:
     for item in MATCH_INFO['basic_info'][:2]:  # Team Number, Match Number
         name = item['name']
         form_data[name] = st.number_input(
-            item['label'],
+            item["label"],
             min_value=1,
             step=1,
             key=name,
-            value=get_field_value(name, None)  # Default to None
+            value=get_field_value(name, None),
+            on_change=update_number_input,
+            args=(name,)
         )
 with col2:
     # Alliance Color
@@ -78,20 +87,17 @@ with col2:
         name = item['name']
         options = item['options']
         current_value = get_field_value(name, None)
-        # Add None as a valid option for the selectbox
         display_options = [None] + options
-        # Format function to display "Choose an option" when value is None
         def format_option(value):
             if value is None:
                 return "Choose an option"
             return value
-        # If current_value is None, index should be 0 (None); otherwise, adjust for the None option
         if current_value is None:
             index = 0
         else:
-            index = options.index(current_value) + 1  # +1 because None is at index 0
+            index = options.index(current_value) + 1
         selected_value = st.selectbox(
-            item['label'],
+            item["label"],
             options=display_options,
             index=index,
             key=name,
@@ -104,20 +110,17 @@ with col2:
     name = item['name']
     options = item['options']
     current_value = get_field_value(name, None)
-    # Add None as a valid option for the selectbox
     display_options = [None] + options
-    # Format function to display "Choose an option" when value is None
     def format_option(value):
         if value is None:
             return "Choose an option"
         return value
-    # If current_value is None, index should be 0 (None); otherwise, adjust for the None option
     if current_value is None:
         index = 0
     else:
-        index = options.index(current_value) + 1  # +1 because None is at index 0
+        index = options.index(current_value) + 1
     selected_value = st.selectbox(
-        item['label'],
+        item["label"],
         options=display_options,
         index=index,
         key=name,
@@ -130,13 +133,16 @@ with col3:
     for item in MATCH_INFO['basic_info'][3:4]:  # Scouter Name (index 3)
         name = item['name']
         form_data[name] = st.text_input(
-            item['label'],
+            item["label"],
             key=name,
             value=get_field_value(name, "")
         )
 
-# Autonomous Section
-st.subheader("Autonomous Period")
+# Horizontal line after Match Info (Blue: #007BFF)
+st.markdown('<hr style="border-top: 5px solid #007BFF; margin: 20px 0;">', unsafe_allow_html=True)
+
+# Autonomous Section (Green: #28A745)
+st.markdown('<div style="color: #28A745; font-size: 24px; font-weight: bold; margin-bottom: 10px">Autonomous Period</div>', unsafe_allow_html=True)
 # Mobility at the start
 col1, col2, col3 = st.columns([1, 2, 2])
 with col1:
@@ -144,7 +150,7 @@ with col1:
     for mobility_item in AUTONOMOUS['mobility']:
         name = mobility_item['name']
         form_data[name] = st.checkbox(
-            mobility_item['label'],
+            mobility_item["label"],
             key=name,
             value=get_field_value(name, False)
         )
@@ -160,22 +166,26 @@ with col1:
     for scoring_item in AUTONOMOUS['scoring']:
         name = scoring_item['name']
         form_data[name] = st.number_input(
-            scoring_item['label'],
+            scoring_item["label"],
             min_value=0,
             value=get_field_value(name, 0),
             step=1,
-            key=name
+            key=name,
+            on_change=update_number_input,
+            args=(name,)
         )
 with col2:
     st.markdown("**Coral Missed**")
     for missed_item in AUTONOMOUS['missed_attempts']:
         name = missed_item['name']
         form_data[name] = st.number_input(
-            missed_item['label'],
+            missed_item["label"],
             min_value=0,
             value=get_field_value(name, 0),
             step=1,
-            key=name
+            key=name,
+            on_change=update_number_input,
+            args=(name,)
         )
 
 # Algae Management
@@ -185,37 +195,46 @@ with col1:
     for algae_item in AUTONOMOUS['algae_management'][:2]:  # Algae to Barge, Processor
         name = algae_item['name']
         form_data[name] = st.number_input(
-            algae_item['label'],
+            algae_item["label"],
             min_value=0,
             value=get_field_value(name, 0),
             step=1,
-            key=name
+            key=name,
+            on_change=update_number_input,
+            args=(name,)
         )
 with col2:
     st.markdown("**Algae Missed**")
     for algae_item in AUTONOMOUS['algae_management'][2:4]:  # Missed Algae to Barge, Processor
         name = algae_item['name']
         form_data[name] = st.number_input(
-            algae_item['label'],
+            algae_item["label"],
             min_value=0,
             value=get_field_value(name, 0),
             step=1,
-            key=name
+            key=name,
+            on_change=update_number_input,
+            args=(name,)
         )
 with col3:
     st.markdown("**Algae Removed**")
     for algae_item in AUTONOMOUS['algae_management'][4:5]:  # Algae Removed
         name = algae_item['name']
         form_data[name] = st.number_input(
-            algae_item['label'],
+            algae_item["label"],
             min_value=0,
             value=get_field_value(name, 0),
             step=1,
-            key=name
+            key=name,
+            on_change=update_number_input,
+            args=(name,)
         )
 
-# Teleop Section
-st.subheader("Teleop Period")
+# Horizontal line after Autonomous (Green: #28A745)
+st.markdown('<hr style="border-top: 5px solid #28A745; margin: 20px 0;">', unsafe_allow_html=True)
+
+# Teleop Section (Orange: #FD7E14)
+st.markdown('<div style="color: #FD7E14; font-size: 24px; font-weight: bold; margin-bottom: 10px">Teleop Period</div>', unsafe_allow_html=True)
 # Scoring and Missed Attempts side by side
 col1, col2 = st.columns(2)
 with col1:
@@ -223,22 +242,26 @@ with col1:
     for scoring_item in TELEOP['scoring']:
         name = scoring_item['name']
         form_data[name] = st.number_input(
-            scoring_item['label'],
+            scoring_item["label"],
             min_value=0,
             value=get_field_value(name, 0),
             step=1,
-            key=name
+            key=name,
+            on_change=update_number_input,
+            args=(name,)
         )
 with col2:
     st.markdown("**Coral Missed**")
     for missed_item in TELEOP['missed_attempts']:
         name = missed_item['name']
         form_data[name] = st.number_input(
-            missed_item['label'],
+            missed_item["label"],
             min_value=0,
             value=get_field_value(name, 0),
             step=1,
-            key=name
+            key=name,
+            on_change=update_number_input,
+            args=(name,)
         )
 
 # Algae Management
@@ -248,37 +271,46 @@ with col1:
     for algae_item in TELEOP['algae_management'][:2]:  # Algae to Barge, Processor
         name = algae_item['name']
         form_data[name] = st.number_input(
-            algae_item['label'],
+            algae_item["label"],
             min_value=0,
             value=get_field_value(name, 0),
             step=1,
-            key=name
+            key=name,
+            on_change=update_number_input,
+            args=(name,)
         )
 with col2:
     st.markdown("**Algae Missed**")
     for algae_item in TELEOP['algae_management'][2:4]:  # Missed Algae to Barge, Processor
         name = algae_item['name']
         form_data[name] = st.number_input(
-            algae_item['label'],
+            algae_item["label"],
             min_value=0,
             value=get_field_value(name, 0),
             step=1,
-            key=name
+            key=name,
+            on_change=update_number_input,
+            args=(name,)
         )
 with col3:
     st.markdown("**Algae Removed**")
     for algae_item in TELEOP['algae_management'][4:5]:  # Algae Removed
         name = algae_item['name']
         form_data[name] = st.number_input(
-            algae_item['label'],
+            algae_item["label"],
             min_value=0,
             value=get_field_value(name, 0),
             step=1,
-            key=name
+            key=name,
+            on_change=update_number_input,
+            args=(name,)
         )
 
-# Endgame Section
-st.subheader("Endgame")
+# Horizontal line after Teleop (Orange: #FD7E14)
+st.markdown('<hr style="border-top: 5px solid #FD7E14; margin: 20px 0;">', unsafe_allow_html=True)
+
+# Endgame Section (Purple: #6F42C1)
+st.markdown('<div style="color: #6F42C1; font-size: 24px; font-weight: bold; margin-bottom: 10px">Endgame</div>', unsafe_allow_html=True)
 col1, col2, col3 = st.columns([1, 2, 2])
 with col1:
     item = ENDGAME['climb_status']
@@ -289,7 +321,7 @@ with col1:
     if current_value not in options:
         current_value = options[default_index]
     form_data[name] = st.selectbox(
-        item['label'],
+        item["label"],
         options=options,
         index=options.index(current_value),
         key=name
@@ -299,14 +331,17 @@ with col2:
 with col3:
     pass  # Empty column for spacing
 
-# Performance Ratings Section
-st.subheader("Performance Ratings")
+# Horizontal line after Endgame (Purple: #6F42C1)
+st.markdown('<hr style="border-top: 5px solid #6F42C1; margin: 20px 0;">', unsafe_allow_html=True)
+
+# Performance Ratings Section (Teal: #20C997)
+st.markdown('<div style="color: #20C997; font-size: 24px; font-weight: bold; margin-bottom: 10px">Performance Ratings</div>', unsafe_allow_html=True)
 col1, col2, col3 = st.columns(3)
 for idx, rating_item in enumerate(PERFORMANCE_RATINGS['ratings']):
     with [col1, col2, col3][idx % 3]:
         name = rating_item['name']
         form_data[name] = st.slider(
-            rating_item['label'],
+            rating_item["label"],
             min_value=rating_item['min'],
             max_value=rating_item['max'],
             value=get_field_value(name, 3),
@@ -314,28 +349,28 @@ for idx, rating_item in enumerate(PERFORMANCE_RATINGS['ratings']):
             key=name
         )
 
-# Strategy Section (Primary Role)
-st.subheader("Strategy")
+# Horizontal line after Performance Ratings (Teal: #20C997)
+st.markdown('<hr style="border-top: 5px solid #20C997; margin: 20px 0;">', unsafe_allow_html=True)
+
+# Strategy Section (Indigo: #6610F2)
+st.markdown('<div style="color: #6610F2; font-size: 24px; font-weight: bold; margin-bottom: 10px">Strategy</div>', unsafe_allow_html=True)
 col1, col2, col3 = st.columns([1, 2, 2])
 with col1:
     item = STRATEGY['primary_role']
     name = item['name']
     options = item['options']
     current_value = get_field_value(name, None)
-    # Add None as a valid option for the selectbox
     display_options = [None] + options
-    # Format function to display "Choose an option" when value is None
     def format_option(value):
         if value is None:
             return "Choose an option"
         return value
-    # If current_value is None, index should be 0 (None); otherwise, adjust for the None option
     if current_value is None:
         index = 0
     else:
-        index = options.index(current_value) + 1  # +1 because None is at index 0
+        index = options.index(current_value) + 1
     selected_value = st.selectbox(
-        item['label'],
+        item["label"],
         options=display_options,
         index=index,
         key=name,
@@ -348,41 +383,44 @@ with col2:
 with col3:
     pass  # Empty column for spacing
 
-# Analysis Section
-st.subheader("Qualitative Analysis")
+# Horizontal line after Strategy (Indigo: #6610F2)
+st.markdown('<hr style="border-top: 5px solid #6610F2; margin: 20px 0;">', unsafe_allow_html=True)
+
+# Analysis Section (Cyan: #17A2B8)
+st.markdown('<div style="color: #17A2B8; font-size: 24px; font-weight: bold; margin-bottom: 10px">Qualitative Analysis</div>', unsafe_allow_html=True)
 col1, col2 = st.columns(2)
 for idx, question_item in enumerate(ANALYSIS['questions']):
     with [col1, col2][idx % 2]:
         name = question_item['name']
         form_data[name] = st.text_area(
-            question_item['label'],
+            question_item["label"],
             help=question_item.get('help', ''),
             key=name,
             value=get_field_value(name, "")
         )
 
-# Match Outcome Section
-st.subheader("Match Outcome")
+# Horizontal line after Analysis (Cyan: #17A2B8)
+st.markdown('<hr style="border-top: 5px solid #17A2B8; margin: 20px 0;">', unsafe_allow_html=True)
+
+# Match Outcome Section (Red: #DC3545)
+st.markdown('<div style="color: #DC3545; font-size: 24px; font-weight: bold; margin-bottom: 10px">Match Outcome</div>', unsafe_allow_html=True)
 col1, col2, col3 = st.columns([1, 2, 2])
 with col1:
     item = MATCH_OUTCOME['outcome']
     name = item['name']
     options = item['options']
     current_value = get_field_value(name, None)
-    # Add None as a valid option for the selectbox
     display_options = [None] + options
-    # Format function to display "Choose an option" when value is None
     def format_option(value):
         if value is None:
             return "Choose an option"
         return value
-    # If current_value is None, index should be 0 (None); otherwise, adjust for the None option
     if current_value is None:
         index = 0
     else:
-        index = options.index(current_value) + 1  # +1 because None is at index 0
+        index = options.index(current_value) + 1
     selected_value = st.selectbox(
-        item['label'],
+        item["label"],
         options=display_options,
         index=index,
         key=name,
@@ -394,6 +432,9 @@ with col2:
     pass  # Empty column for spacing
 with col3:
     pass  # Empty column for spacing
+
+# Horizontal line after Match Outcome (Red: #DC3545)
+st.markdown('<hr style="border-top: 5px solid #DC3545; margin: 20px 0;">', unsafe_allow_html=True)
 
 # Submit and Clear buttons
 col1, col2 = st.columns(2)
@@ -426,18 +467,25 @@ if submit_button:
         # Save data to Firestore
         success, doc_id = save_data(form_data)
         if success:
-            st.success(f"Match data submitted successfully! Document ID: {doc_id}")  # Green confirmation
-            st.balloons()  # Balloon effect
-            st.session_state.form_cleared = True  # Trigger form clearing after successful submission
-            st.session_state.form_data = {}  # Clear the stored form data
+            st.success(f"Match data submitted successfully! Document ID: {doc_id}")
+            st.balloons()
+            preserved_data = {
+                "scouter_name": form_data.get("scouter_name", ""),
+                "alliance_color": form_data.get("alliance_color", None)
+            }
+            st.session_state.form_data = preserved_data
+            st.session_state.form_cleared = True
         else:
             st.error("Failed to submit match data.")
 
 # Handle form clearing
 if clear_button:
-    st.session_state.form_cleared = True  # Trigger form clearing
-    st.session_state.form_data = {}  # Clear the stored form data
-    st.rerun()  # Rerun the app to reset the form fields
+    preserved_data = {
+        "scouter_name": st.session_state.form_data.get("scouter_name", ""),
+        "alliance_color": st.session_state.form_data.get("alliance_color", None)
+    }
+    st.session_state.form_data = preserved_data
+    st.session_state.form_cleared = True
 
 # Reset the form_cleared state after clearing
 if st.session_state.form_cleared and not submit_button and not clear_button:
