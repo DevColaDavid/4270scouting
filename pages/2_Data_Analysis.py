@@ -17,11 +17,15 @@ st_autorefresh(interval=10000, key="data_analysis_refresh")
 st.title("📊 Data Analysis")
 st.info("This page automatically updates every 10 seconds to reflect new scouting data.")
 
-# Load data
-df = load_data()
+# Load data with error handling
+try:
+    df = load_data()
+except Exception as e:
+    st.error(f"Failed to load data: {str(e)}")
+    st.stop()
 
 if df is None or df.empty:
-    st.info("No match data available for analysis.")
+    st.info("No match data available for analysis. Please upload data in the Data Upload page.")
     st.stop()
 
 # Ensure numeric columns are properly typed
@@ -37,7 +41,14 @@ numeric_cols = [
 ]
 for col in numeric_cols:
     if col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+# Convert team_number to string to ensure consistency
+if 'team_number' in df.columns:
+    df['team_number'] = df['team_number'].astype(str)
+else:
+    st.error("Required column 'team_number' is missing in the data.")
+    st.stop()
 
 # Define required columns for scoring
 required_cols = [
@@ -170,7 +181,8 @@ if all(col in df.columns for col in required_cols):
 
     df = calculate_epa(df)
 else:
-    st.warning("Cannot calculate match scores. Missing required columns.")
+    st.warning("Cannot calculate match scores. Missing required columns: " +
+               ", ".join([col for col in required_cols if col not in df.columns]))
     st.stop()
 
 # Team selection for detailed analysis
@@ -207,7 +219,10 @@ leaderboard_data = df.groupby('team_number').agg({
     'total_score': 'mean',           # Average Total Score
     'epa': 'mean',                   # Average EPA
     'coral_success_ratio': 'mean',   # Average Coral Success Ratio
-    'algae_success_ratio': 'mean'    # Average Algae Success Ratio
+    'algae_success_ratio': 'mean',   # Average Algae Success Ratio
+    'defense_rating': 'mean',        # Average Defense Rating
+    'speed_rating': 'mean',          # Average Speed Rating
+    'driver_skill_rating': 'mean'    # Average Driver Skill Rating
 }).reset_index()
 
 # Convert success ratios to percentages
@@ -220,7 +235,10 @@ leaderboard_data = leaderboard_data.rename(columns={
     'total_score': 'Average Total Score',
     'epa': 'Average EPA',
     'coral_success_ratio': 'Coral Success Ratio (%)',
-    'algae_success_ratio': 'Algae Success Ratio (%)'
+    'algae_success_ratio': 'Algae Success Ratio (%)',
+    'defense_rating': 'Average Defense Rating',
+    'speed_rating': 'Average Speed Rating',
+    'driver_skill_rating': 'Average Driver Skill Rating'
 })
 
 # Dropdown to select the sorting metric
@@ -230,7 +248,10 @@ sort_metric = st.selectbox(
         "Average Total Score",
         "Average EPA",
         "Coral Success Ratio (%)",
-        "Algae Success Ratio (%)"
+        "Algae Success Ratio (%)",
+        "Average Defense Rating",
+        "Average Speed Rating",
+        "Average Driver Skill Rating"
     ],
     index=0  # Default to Average Total Score
 )
@@ -240,7 +261,10 @@ sort_column_map = {
     "Average Total Score": "Average Total Score",
     "Average EPA": "Average EPA",
     "Coral Success Ratio (%)": "Coral Success Ratio (%)",
-    "Algae Success Ratio (%)": "Algae Success Ratio (%)"
+    "Algae Success Ratio (%)": "Algae Success Ratio (%)",
+    "Average Defense Rating": "Average Defense Rating",
+    "Average Speed Rating": "Average Speed Rating",
+    "Average Driver Skill Rating": "Average Driver Skill Rating"
 }
 
 # Sort the leaderboard based on the selected metric
@@ -255,7 +279,8 @@ leaderboard_data['Rank'] = ranks.fillna(max_rank + 1).astype(int)
 # Reorder columns to put Rank first
 leaderboard_data = leaderboard_data[[
     'Rank', 'Team Number', 'Average Total Score', 'Average EPA',
-    'Coral Success Ratio (%)', 'Algae Success Ratio (%)'
+    'Coral Success Ratio (%)', 'Algae Success Ratio (%)',
+    'Average Defense Rating', 'Average Speed Rating', 'Average Driver Skill Rating'
 ]]
 
 # Round the values for better readability
@@ -263,6 +288,9 @@ leaderboard_data['Average Total Score'] = leaderboard_data['Average Total Score'
 leaderboard_data['Average EPA'] = leaderboard_data['Average EPA'].round(2)
 leaderboard_data['Coral Success Ratio (%)'] = leaderboard_data['Coral Success Ratio (%)'].round(2)
 leaderboard_data['Algae Success Ratio (%)'] = leaderboard_data['Algae Success Ratio (%)'].round(2)
+leaderboard_data['Average Defense Rating'] = leaderboard_data['Average Defense Rating'].round(2)
+leaderboard_data['Average Speed Rating'] = leaderboard_data['Average Speed Rating'].round(2)
+leaderboard_data['Average Driver Skill Rating'] = leaderboard_data['Average Driver Skill Rating'].round(2)
 
 # Display the leaderboard
 st.dataframe(
@@ -483,37 +511,70 @@ else:
 st.subheader("Performance Ratings")
 st.markdown("Average ratings for defense, speed, and driver skill, as assessed by scouters (1 to 5).")
 if 'defense_rating' in df.columns and 'speed_rating' in df.columns and 'driver_skill_rating' in df.columns:
+    # Calculate average ratings for each team
     ratings = df.groupby('team_number')[['defense_rating', 'speed_rating', 'driver_skill_rating']].mean().reset_index()
+
+    # If specific teams are selected, use only those teams
+    if selected_teams:
+        ratings = ratings[ratings['team_number'].isin(selected_teams)]
+    else:
+        # Sort by defense_rating to determine top teams
+        ratings = ratings.sort_values('defense_rating', ascending=False)
+        # Get the total number of teams
+        total_teams = len(ratings)
+        # Add a slider to select the number of teams to display (default to 10, max is total_teams)
+        num_teams_to_display = st.slider(
+            "Number of Teams to Display in Radar Chart",
+            min_value=1,
+            max_value=total_teams,
+            value=min(10, total_teams),  # Default to 10 or total_teams if less than 10
+            step=1
+        )
+        # Limit to the selected number of top teams
+        ratings = ratings.head(num_teams_to_display)
+
+    # Create radar chart
     fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=ratings['defense_rating'],
-        y=ratings['team_number'],
-        name='Defense Rating',
-        orientation='h'
-    ))
-    fig.add_trace(go.Bar(
-        x=ratings['speed_rating'],
-        y=ratings['team_number'],
-        name='Speed Rating',
-        orientation='h'
-    ))
-    fig.add_trace(go.Bar(
-        x=ratings['driver_skill_rating'],
-        y=ratings['team_number'],
-        name='Driver Skill Rating',
-        orientation='h'
-    ))
+    categories = ['Defense', 'Speed', 'Driver Skill', 'Defense']  # Repeat the first category to close the loop
+
+    # Define a list of colors for different teams
+    colors = px.colors.qualitative.Plotly  # A list of distinct colors
+
+    for idx, row in ratings.iterrows():
+        team = row['team_number']
+        values = [
+            row['defense_rating'],
+            row['speed_rating'],
+            row['driver_skill_rating'],
+            row['defense_rating']  # Repeat the first value to close the loop
+        ]
+        # Only add the trace if the team has non-zero ratings
+        if sum(values[:-1]) > 0:  # Exclude the repeated value for the check
+            fig.add_trace(go.Scatterpolar(
+                r=values,
+                theta=categories,
+                fill='toself',
+                name=f'Team {team}',
+                line=dict(color=colors[idx % len(colors)]),
+                fillcolor=colors[idx % len(colors)].replace('rgb', 'rgba').replace(')', ', 0.15)')  # Reduced opacity to 0.15
+            ))
+
     fig.update_layout(
-        barmode='group',
-        title="Average Performance Ratings by Team",
-        xaxis_title="Rating",
-        yaxis_title="Team Number",
-        legend_title="Rating Type"
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 5],  # Ratings are from 1 to 5
+                tickvals=[1, 2, 3, 4, 5]
+            )
+        ),
+        showlegend=True,
+        title="Performance Ratings by Team (Radar Chart)",
+        margin=dict(l=50, r=50, t=50, b=50)
     )
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.warning("Performance rating data not available for visualization.")
-
+    
 # Taxi Rate by Team
 st.subheader("Taxi Rate by Team")
 st.markdown("Percentage of matches where each team successfully taxied (left starting position) during autonomous.")
