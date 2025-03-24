@@ -4,26 +4,80 @@ import plotly.express as px
 import plotly.graph_objects as go
 import sys
 import os
+import time
+from datetime import datetime
+
 # Add the parent directory to the Python path to ensure utils can be found
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utils.utils import load_data, calculate_match_score  # Corrected import for Scenario 2
-from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="Data Analysis", page_icon="📊", layout="wide")
 
-# Auto-refresh every 10 seconds (10000 milliseconds)
-st_autorefresh(interval=10000, key="data_analysis_refresh")
-
 st.title("📊 Data Analysis")
-st.info("This page automatically updates every 10 seconds to reflect new scouting data.")
+st.info("This page automatically updates every 30 seconds to reflect new scouting data. Use the button below to refresh manually.")
 
-# Load data with error handling
-try:
-    df = load_data()
-except Exception as e:
-    st.error(f"Failed to load data: {str(e)}")
-    st.stop()
+# Track the active page
+if 'active_page' not in st.session_state:
+    st.session_state.active_page = None
 
+# Set the active page to "Data Analysis" when this page is loaded
+st.session_state.active_page = "Data Analysis"
+
+# Function to fetch data with 30-second polling and manual refresh
+def fetch_data(force_refresh=False):
+    # Initialize match_data in session state if not present
+    if 'analysis_data' not in st.session_state:
+        st.session_state.analysis_data = None
+    
+    # Initialize last fetch time if not present
+    if 'last_fetch_time_analysis' not in st.session_state:
+        st.session_state.last_fetch_time_analysis = 0
+    
+    # Only fetch if we're on the Data Analysis page or if force_refresh is True
+    if st.session_state.active_page != "Data Analysis" and not force_refresh:
+        return st.session_state.analysis_data
+
+    # Fetch data if 30 seconds have passed, cache is empty, or force_refresh is True
+    current_time = time.time()
+    if force_refresh or current_time - st.session_state.last_fetch_time_analysis >= 30 or st.session_state.analysis_data is None:
+        try:
+            df = load_data()
+            st.session_state.analysis_data = df
+            st.session_state.last_fetch_time_analysis = current_time
+            st.session_state.fetch_log_analysis = f"Data fetched at {datetime.fromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S')}: {len(df) if df is not None else 0} records"
+        except Exception as e:
+            st.error(f"Failed to load data: {str(e)}")
+            st.session_state.analysis_data = None
+            st.stop()
+    
+    return st.session_state.analysis_data
+
+# Manual refresh button
+if st.button("Refresh Now", key="manual_refresh_analysis"):
+    fetch_data(force_refresh=True)
+    st.rerun()
+
+# Fetch data
+with st.spinner("Loading data for analysis..."):
+    df = fetch_data()
+
+# Display fetch log
+if 'fetch_log_analysis' in st.session_state:
+    st.write(f"{st.session_state.fetch_log_analysis}")
+
+# Display static countdown to next refresh
+if 'last_fetch_time_analysis' in st.session_state:
+    time_since_last_fetch = time.time() - st.session_state.last_fetch_time_analysis
+    time_until_next_fetch = max(0, 30 - time_since_last_fetch)
+    st.write(f"Next refresh in {int(time_until_next_fetch)} seconds")
+
+# Schedule the next refresh (only if on Data Analysis page)
+if st.session_state.active_page == "Data Analysis":
+    time_since_last_fetch = time.time() - st.session_state.last_fetch_time_analysis
+    if time_since_last_fetch >= 30:
+        st.rerun()
+
+# Stop if no data is available
 if df is None or df.empty:
     st.info("No match data available for analysis. Please upload data in the Data Upload page.")
     st.stop()
@@ -520,58 +574,70 @@ if 'defense_rating' in df.columns and 'speed_rating' in df.columns and 'driver_s
     else:
         # Sort by defense_rating to determine top teams
         ratings = ratings.sort_values('defense_rating', ascending=False)
-        # Get the total number of teams
-        total_teams = len(ratings)
-        # Add a slider to select the number of teams to display (default to 10, max is total_teams)
-        num_teams_to_display = st.slider(
-            "Number of Teams to Display in Radar Chart",
-            min_value=1,
-            max_value=total_teams,
-            value=min(10, total_teams),  # Default to 10 or total_teams if less than 10
-            step=1
-        )
+
+    # Get the total number of teams
+    total_teams = len(ratings)
+
+    # Check if there are teams to display
+    if total_teams == 0:
+        st.warning("No teams available to display in the radar chart. Please select teams or ensure rating data exists.")
+    else:
+        # If there's only one team, skip the slider and set num_teams_to_display to 1
+        if total_teams == 1:
+            num_teams_to_display = 1
+            st.info("Only one team available to display in the radar chart.")
+        else:
+            # Add a slider to select the number of teams to display (default to 10, max is total_teams)
+            num_teams_to_display = st.slider(
+                "Number of Teams to Display in Radar Chart",
+                min_value=1,
+                max_value=total_teams,
+                value=min(10, total_teams),  # Default to 10 or total_teams if less than 10
+                step=1
+            )
+
         # Limit to the selected number of top teams
         ratings = ratings.head(num_teams_to_display)
 
-    # Create radar chart
-    fig = go.Figure()
-    categories = ['Defense', 'Speed', 'Driver Skill', 'Defense']  # Repeat the first category to close the loop
+        # Create radar chart
+        fig = go.Figure()
+        categories = ['Defense', 'Speed', 'Driver Skill', 'Defense']  # Repeat the first category to close the loop
 
-    # Define a list of colors for different teams
-    colors = px.colors.qualitative.Plotly  # A list of distinct colors
+        # Define a list of colors for different teams
+        colors = px.colors.qualitative.Plotly  # A list of distinct colors
 
-    for idx, row in ratings.iterrows():
-        team = row['team_number']
-        values = [
-            row['defense_rating'],
-            row['speed_rating'],
-            row['driver_skill_rating'],
-            row['defense_rating']  # Repeat the first value to close the loop
-        ]
-        # Only add the trace if the team has non-zero ratings
-        if sum(values[:-1]) > 0:  # Exclude the repeated value for the check
-            fig.add_trace(go.Scatterpolar(
-                r=values,
-                theta=categories,
-                fill='toself',
-                name=f'Team {team}',
-                line=dict(color=colors[idx % len(colors)]),
-                fillcolor=colors[idx % len(colors)].replace('rgb', 'rgba').replace(')', ', 0.15)')  # Reduced opacity to 0.15
-            ))
+        for idx, row in ratings.iterrows():
+            team = row['team_number']
+            values = [
+                row['defense_rating'],
+                row['speed_rating'],
+                row['driver_skill_rating'],
+                row['defense_rating']  # Repeat the first value to close the loop
+            ]
+            # Only add the trace if the team has non-zero ratings
+            if sum(values[:-1]) > 0:  # Exclude the repeated value for the check
+                fig.add_trace(go.Scatterpolar(
+                    r=values,
+                    theta=categories,
+                    fill='toself',
+                    name=f'Team {team}',
+                    line=dict(color=colors[idx % len(colors)]),
+                    fillcolor=colors[idx % len(colors)].replace('rgb', 'rgba').replace(')', ', 0.15)')  # Reduced opacity to 0.15
+                ))
 
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, 5],  # Ratings are from 1 to 5
-                tickvals=[1, 2, 3, 4, 5]
-            )
-        ),
-        showlegend=True,
-        title="Performance Ratings by Team (Radar Chart)",
-        margin=dict(l=50, r=50, t=50, b=50)
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        fig.update_layout(
+            polar=dict(
+                radialaxis=dict(
+                    visible=True,
+                    range=[0, 5],  # Ratings are from 1 to 5
+                    tickvals=[1, 2, 3, 4, 5]
+                )
+            ),
+            showlegend=True,
+            title="Performance Ratings by Team (Radar Chart)",
+            margin=dict(l=50, r=50, t=50, b=50)
+        )
+        st.plotly_chart(fig, use_container_width=True)
 else:
     st.warning("Performance rating data not available for visualization.")
     
