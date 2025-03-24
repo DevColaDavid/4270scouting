@@ -6,26 +6,32 @@ from firebase_admin import credentials, firestore
 from io import StringIO
 import time
 from datetime import datetime
+import hashlib
+from utils.utils import setup_sidebar_navigation
 
-st.set_page_config(page_title="Data Management", page_icon="🔧", layout="wide")
+st.set_page_config(page_title="Data Management", page_icon="🔧", layout="wide",initial_sidebar_state="collapsed")
 
-# Password protection
-ADMIN_PASSWORD = "scouting4270admin"
+# Check if the user is logged in
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.error("Please log in to access this page.")
+    st.stop()
 
-# Use session state to track if the user is authenticated
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
+# Set up the sidebar navigation
+setup_sidebar_navigation()
 
-if not st.session_state.authenticated:
-    st.title("🔒 Data Management - Authentication Required")
-    password = st.text_input("Enter Admin Password", type="password")
-    if st.button("Login"):
-        if password == ADMIN_PASSWORD:
-            st.session_state.authenticated = True
-            st.success("Access granted! You can now manage data.")
-            st.rerun()
-        else:
-            st.error("Incorrect password. Access denied.")
+# Page content
+st.title("Data Management")
+st.write("This is the Data Management page.")
+
+# Check if the user is logged in and has the appropriate authority
+if not st.session_state.get("logged_in", False):
+    st.error("You must be logged in to access this page.")
+    st.stop()
+
+# Check user authority
+allowed_authorities = ["Admin", "Owner"]
+if st.session_state.get("authority") not in allowed_authorities:
+    st.error("You do not have the required authority to access this page. Required: Admin or Owner.")
     st.stop()
 
 # Track the active page
@@ -36,7 +42,7 @@ if 'active_page' not in st.session_state:
 st.session_state.active_page = "Data Management"
 
 st.title("🔧 Data Management")
-st.markdown("Manage scouting data in Firebase: edit, delete, archive, unarchive, inspect errors, or upload new records via CSV.")
+st.info(f"Welcome, {st.session_state.username}! Manage scouting data and users in Firebase.")
 
 # Initialize Firebase
 try:
@@ -64,7 +70,11 @@ except Exception as e:
 
 db = firestore.client()
 
-# Define desired column order
+# Function to hash passwords
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# Define desired column order for match data
 desired_columns = [
     'timestamp', 'team_number', 'match_number', 'alliance_color', 'starting_position', 'scouter_name',
     'match_outcome', 'auto_taxi_left', 'auto_coral_l1', 'auto_coral_l2', 'auto_coral_l3', 'auto_coral_l4',
@@ -99,23 +109,18 @@ rating_fields = ['defense_rating', 'speed_rating', 'driver_skill_rating']
 
 # Function to fetch match data (optimized polling every 30 seconds, fetching all data)
 def fetch_match_data(for_selection=False, force_refresh=False):
-    # Initialize match_data in session state if not present
     if 'match_data' not in st.session_state:
         st.session_state.match_data = pd.DataFrame()
     
-    # Initialize last fetch time if not present
     if 'last_fetch_time' not in st.session_state:
         st.session_state.last_fetch_time = 0
     
-    # Only fetch if we're on the Data Management page or if force_refresh is True
     if st.session_state.active_page != "Data Management" and not force_refresh:
         return st.session_state.match_data if not for_selection else st.session_state.match_data.copy()
 
-    # Fetch data if 30 seconds have passed, cache is empty, or force_refresh is True
     current_time = time.time()
     if force_refresh or current_time - st.session_state.last_fetch_time >= 30 or st.session_state.match_data.empty:
         try:
-            # Fetch all documents, optimize by selecting only necessary fields
             docs = db.collection('scouting_data')\
                      .select(desired_columns + ['doc_id'])\
                      .order_by('timestamp', direction=firestore.Query.DESCENDING)\
@@ -203,7 +208,6 @@ def fetch_doc_ids_for_edit():
                 data.append(doc_data)
             df = pd.DataFrame(data)
             if df.empty:
-                # If no documents are found, return an empty result
                 st.session_state.doc_ids_for_edit = {'df': pd.DataFrame(), 'labels': [], 'mapping': {}}
             else:
                 labels = [f"Team {row['team_number']} - Match {row['match_number']}" for _, row in df.iterrows()]
@@ -232,7 +236,6 @@ def fetch_single_record(doc_id):
 # Function to update a match record in Firestore by deleting and recreating
 def update_match_data(doc_id, updated_data):
     try:
-        # Step 1: Fetch the original record and save it to edit_history
         original_doc = db.collection('scouting_data').document(doc_id).get()
         if original_doc.exists:
             edit_timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
@@ -245,29 +248,24 @@ def update_match_data(doc_id, updated_data):
         else:
             st.warning(f"Original record {doc_id} not found in scouting_data. Proceeding with new record creation.")
 
-        # Step 2: Delete the existing record
         db.collection('scouting_data').document(doc_id).delete()
         
-        # Step 3: Generate a new document ID
         team_number = updated_data['team_number']
         match_number = updated_data['match_number']
         timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
         new_doc_id = f"team{team_number}_match{match_number}_{timestamp}"
         
-        # Step 4: Create a new record with the new ID
         updated_data['timestamp'] = timestamp
         db.collection('scouting_data').document(new_doc_id).set(updated_data)
         
-        # Step 5: Clear the edit dropdown cache to refresh the list
         if 'doc_ids_for_edit' in st.session_state:
             del st.session_state.doc_ids_for_edit
         
-        # Step 6: Clear the match data cache and force a refresh
         if 'match_data' in st.session_state:
             del st.session_state.match_data
-        st.session_state.last_fetch_time = 0  # Reset the timer to force immediate fetch
+        st.session_state.last_fetch_time = 0
         st.success(f"Record successfully updated! Old record {doc_id} deleted, new record created with ID {new_doc_id}. Edit history recorded.")
-        st.rerun()  # Trigger immediate refresh
+        st.rerun()
     except Exception as e:
         st.error(f"Error updating record {doc_id}: {e}")
 
@@ -281,8 +279,8 @@ def delete_match_data(doc_ids):
             del st.session_state.doc_ids_for_edit
         if 'match_data' in st.session_state:
             del st.session_state.match_data
-        st.session_state.last_fetch_time = 0  # Reset the timer to force immediate fetch
-        st.rerun()  # Trigger immediate refresh
+        st.session_state.last_fetch_time = 0
+        st.rerun()
     except Exception as e:
         st.error(f"Error deleting records: {e}")
 
@@ -301,8 +299,8 @@ def delete_all_match_data():
             del st.session_state.doc_ids_for_edit
         if 'match_data' in st.session_state:
             st.session_state.match_data = pd.DataFrame()
-        st.session_state.last_fetch_time = 0  # Reset the timer to force immediate fetch
-        st.rerun()  # Trigger immediate refresh
+        st.session_state.last_fetch_time = 0
+        st.rerun()
     except Exception as e:
         st.error(f"Error deleting all records: {e}")
 
@@ -334,8 +332,8 @@ def archive_match_data(doc_ids):
             st.session_state.archived_match_data = pd.DataFrame()
         if 'match_data' in st.session_state:
             del st.session_state.match_data
-        st.session_state.last_fetch_time = 0  # Reset the timer to force immediate fetch
-        st.rerun()  # Trigger immediate refresh
+        st.session_state.last_fetch_time = 0
+        st.rerun()
     except Exception as e:
         st.error(f"Error archiving records: {e}")
 
@@ -370,8 +368,8 @@ def archive_all_match_data():
             st.session_state.archived_match_data = pd.DataFrame()
         if 'match_data' in st.session_state:
             st.session_state.match_data = pd.DataFrame()
-        st.session_state.last_fetch_time = 0  # Reset the timer to force immediate fetch
-        st.rerun()  # Trigger immediate refresh
+        st.session_state.last_fetch_time = 0
+        st.rerun()
     except Exception as e:
         st.error(f"Error archiving all records: {e}")
 
@@ -403,8 +401,8 @@ def unarchive_match_data(doc_ids):
             st.session_state.archived_match_data = pd.DataFrame()
         if 'match_data' in st.session_state:
             del st.session_state.match_data
-        st.session_state.last_fetch_time = 0  # Reset the timer to force immediate fetch
-        st.rerun()  # Trigger immediate refresh
+        st.session_state.last_fetch_time = 0
+        st.rerun()
     except Exception as e:
         st.error(f"Error unarchiving records: {e}")
 
@@ -439,8 +437,8 @@ def unarchive_all_match_data():
             st.session_state.archived_match_data = pd.DataFrame()
         if 'match_data' in st.session_state:
             st.session_state.match_data = pd.DataFrame()
-        st.session_state.last_fetch_time = 0  # Reset the timer to force immediate fetch
-        st.rerun()  # Trigger immediate refresh
+        st.session_state.last_fetch_time = 0
+        st.rerun()
     except Exception as e:
         st.error(f"Error unarchiving all records: {e}")
 
@@ -456,8 +454,8 @@ def upload_match_data(new_data):
             del st.session_state.doc_ids_for_edit
         if 'match_data' in st.session_state:
             del st.session_state.match_data
-        st.session_state.last_fetch_time = 0  # Reset the timer to force immediate fetch
-        st.rerun()  # Trigger immediate refresh
+        st.session_state.last_fetch_time = 0
+        st.rerun()
     except Exception as e:
         st.error(f"Error uploading match data: {e}")
 
@@ -528,24 +526,88 @@ def inspect_errors(data):
 
     return pd.DataFrame(errors)
 
+# User Management Functions
+def fetch_users():
+    try:
+        docs = db.collection('users').get()
+        data = []
+        for doc in docs:
+            doc_data = doc.to_dict()
+            doc_data['user_id'] = doc.id
+            data.append(doc_data)
+        return pd.DataFrame(data)
+    except Exception as e:
+        st.error(f"Error fetching users from Firestore: {e}")
+        return pd.DataFrame()
+
+def add_user(username, password, authority):
+    try:
+        # Check if username already exists
+        existing_user = db.collection('users').where('username', '==', username).limit(1).get()
+        if existing_user:
+            st.error(f"Username '{username}' already exists. Please choose a different username.")
+            return False
+        user_data = {
+            "username": username,
+            "password": hash_password(password),
+            "authority": authority
+        }
+        db.collection('users').document(f"user_{username}").set(user_data)
+        st.success(f"User '{username}' added successfully!")
+        return True
+    except Exception as e:
+        st.error(f"Error adding user: {e}")
+        return False
+
+def update_user(user_id, username, password, authority):
+    try:
+        # Check if the new username is already taken by another user
+        existing_user = db.collection('users').where('username', '==', username).get()
+        for user in existing_user:
+            if user.id != user_id:
+                st.error(f"Username '{username}' is already taken by another user. Please choose a different username.")
+                return False
+        user_data = {
+            "username": username,
+            "authority": authority
+        }
+        if password:  # Only update password if a new one is provided
+            user_data["password"] = hash_password(password)
+        db.collection('users').document(user_id).update(user_data)
+        st.success(f"User '{username}' updated successfully!")
+        return True
+    except Exception as e:
+        st.error(f"Error updating user: {e}")
+        return False
+
+def delete_users(user_ids):
+    try:
+        for user_id in user_ids:
+            # Prevent deleting the currently logged-in user
+            user_doc = db.collection('users').document(user_id).get()
+            if user_doc.exists and user_doc.to_dict()['username'] == st.session_state.username:
+                st.error("You cannot delete your own account while logged in.")
+                continue
+            db.collection('users').document(user_id).delete()
+            st.success(f"Successfully deleted user with ID {user_id}.")
+    except Exception as e:
+        st.error(f"Error deleting users: {e}")
+
 # Tabs for different data management actions
-tabs = st.tabs(["View Data", "Edit Data", "Delete Data", "Archive Data", "Upload Data", "Unarchive Data", "Inspect Errors", "Edit History"])
+tabs = st.tabs(["View Data", "Edit Data", "Delete Data", "Archive Data", "Upload Data", "Unarchive Data", "Inspect Errors", "Edit History", "User Management"])
 
 # Tab 1: View Data with 30-Second Polling and Manual Refresh
 with tabs[0]:
     st.subheader("View Match Data")
     st.markdown("Data refreshes every 30 seconds to ensure all scouting data is displayed. Use the button below to refresh manually.")
 
-    # Manual refresh button
     if st.button("Refresh Now", key="manual_refresh"):
         fetch_match_data(force_refresh=True)
         st.rerun()
 
-    # Fetch data
     with st.spinner("Loading match data..."):
         match_data = fetch_match_data()
 
-    # Display the data
     if not match_data.empty:
         display_columns = [col for col in desired_columns if col in match_data.columns and col != 'doc_id']
         st.dataframe(match_data[display_columns], use_container_width=True)
@@ -561,17 +623,14 @@ with tabs[0]:
     else:
         st.info("No match data available in the scouting_data collection.")
     
-    # Display fetch log
     if 'fetch_log' in st.session_state:
         st.write(f"{st.session_state.fetch_log}")
 
-    # Display static countdown to next refresh
     if 'last_fetch_time' in st.session_state:
         time_since_last_fetch = time.time() - st.session_state.last_fetch_time
         time_until_next_fetch = max(0, 30 - time_since_last_fetch)
         st.write(f"Next refresh in {int(time_until_next_fetch)} seconds")
 
-    # Schedule the next refresh (only if on Data Management page)
     if st.session_state.active_page == "Data Management":
         time_since_last_fetch = time.time() - st.session_state.last_fetch_time
         if time_since_last_fetch >= 30:
@@ -1077,7 +1136,7 @@ with tabs[4]:
                 del st.session_state.doc_ids_for_edit
             if 'match_data' in st.session_state:
                 del st.session_state.match_data
-            st.session_state.last_fetch_time = 0  # Reset the timer to force immediate fetch
+            st.session_state.last_fetch_time = 0
             st.rerun()
 
 # Tab 6: Unarchive Data
@@ -1160,7 +1219,6 @@ with tabs[7]:
             key="download_edit_history_csv"
         )
 
-        # Delete Edit History Records
         st.markdown("---")
         st.subheader("Delete Edit History Records")
         history_ids = history_df['History ID'].tolist()
@@ -1184,4 +1242,77 @@ with tabs[7]:
                 st.warning("Please confirm that you understand this action cannot be undone.")
     else:
         st.info("No edit history available.")
-        
+
+# Tab 9: User Management (Owner only)
+with tabs[8]:
+    st.subheader("User Management")
+    if st.session_state.authority != "Owner":
+        st.error("You do not have the required authority to access this section. Required: Owner.")
+    else:
+        st.markdown("Manage user accounts: add, edit, or delete users.")
+
+        # View Users
+        st.markdown("### Current Users")
+        users_df = fetch_users()
+        if not users_df.empty:
+            display_columns = ['user_id', 'username', 'authority']
+            st.dataframe(users_df[display_columns], use_container_width=True)
+        else:
+            st.info("No users found in the database.")
+
+        # Add New User
+        st.markdown("---")
+        st.markdown("### Add New User")
+        with st.form("add_user_form"):
+            new_username = st.text_input("Username")
+            new_password = st.text_input("Password", type="password")
+            new_authority = st.selectbox("Authority", options=["Viewer", "Scouter", "Admin", "Owner"])
+            if st.form_submit_button("Add User"):
+                if new_username and new_password:
+                    if add_user(new_username, new_password, new_authority):
+                        st.rerun()
+                else:
+                    st.error("Please provide both a username and password.")
+
+        # Edit User
+        st.markdown("---")
+        st.markdown("### Edit User")
+        if not users_df.empty:
+            user_ids = users_df['user_id'].tolist()
+            user_labels = [f"{row['username']} ({row['authority']})" for _, row in users_df.iterrows()]
+            label_to_user_id = dict(zip(user_labels, user_ids))
+            selected_user_label = st.selectbox("Select User to Edit", options=user_labels, key="edit_user_select")
+            selected_user_id = label_to_user_id[selected_user_label]
+            selected_user = users_df[users_df['user_id'] == selected_user_id].iloc[0]
+
+            with st.form("edit_user_form"):
+                edit_username = st.text_input("Username", value=selected_user['username'])
+                edit_password = st.text_input("New Password (leave blank to keep unchanged)", type="password")
+                edit_authority = st.selectbox("Authority", options=["Viewer", "Scouter", "Admin", "Owner"], index=["Viewer", "Scouter", "Admin", "Owner"].index(selected_user['authority']))
+                if st.form_submit_button("Update User"):
+                    if edit_username:
+                        if update_user(selected_user_id, edit_username, edit_password, edit_authority):
+                            # If the current user updated their own username or authority, update session state
+                            if selected_user['username'] == st.session_state.username:
+                                st.session_state.username = edit_username
+                                st.session_state.authority = edit_authority
+                            st.rerun()
+                    else:
+                        st.error("Username cannot be empty.")
+        else:
+            st.info("No users available to edit.")
+
+        # Delete Users
+        st.markdown("---")
+        st.markdown("### Delete Users")
+        if not users_df.empty:
+            user_ids = users_df['user_id'].tolist()
+            selected_user_ids = st.multiselect("Select Users to Delete", options=user_ids, key="delete_user_select")
+            if st.button("Delete Selected Users", key="delete_users_button"):
+                if selected_user_ids:
+                    delete_users(selected_user_ids)
+                    st.rerun()
+                else:
+                    st.warning("Please select at least one user to delete.")
+        else:
+            st.info("No users available to delete.")

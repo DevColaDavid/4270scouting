@@ -1,3 +1,4 @@
+# pages/2_Data_Analysis.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -6,12 +7,33 @@ import sys
 import os
 import time
 from datetime import datetime
+from utils.utils import setup_sidebar_navigation
 
 # Add the parent directory to the Python path to ensure utils can be found
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from utils.utils import load_data, calculate_match_score  # Corrected import for Scenario 2
+from utils.utils import load_data, calculate_match_score
 
-st.set_page_config(page_title="Data Analysis", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Data Analysis", page_icon="📊", layout="wide",initial_sidebar_state="collapsed")
+
+# Check if the user is logged in
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.error("Please log in to access this page.")
+    st.stop()
+
+# Set up the sidebar navigation
+setup_sidebar_navigation()
+
+# Page content
+st.title("Data Analysis")
+st.write("This is the Data Analysis page.")
+
+# Check if the user is logged in
+if not st.session_state.get("logged_in", False):
+    st.error("You must be logged in to access this page.")
+    st.stop()
+
+# All authority levels can access this page (Viewer, Scouter, Admin, Owner)
+# No additional authority check needed
 
 st.title("📊 Data Analysis")
 st.info("This page automatically updates every 30 seconds to reflect new scouting data. Use the button below to refresh manually.")

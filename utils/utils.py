@@ -1,11 +1,98 @@
 # utils/utils.py
 import os
+import sys
 import pandas as pd
 from datetime import datetime
 import streamlit as st
 from google.cloud import firestore
 from google.oauth2 import service_account
-import sys
+from firebase_admin import credentials, firestore
+import hashlib
+
+# Define page-to-file mapping and authority-based access
+PAGE_CONFIG = {
+    "Main": {
+        "file": "main.py",
+        "authorities": ["Owner", "Admin", "Scouter", "Viewer"]
+    },
+    "Match Scouting": {
+        "file": "pages/1_Match_Scouting.py",
+        "authorities": ["Owner", "Admin", "Scouter"]
+    },
+    "Data Analysis": {
+        "file": "pages/2_Data_Analysis.py",
+        "authorities": ["Owner", "Admin", "Scouter", "Viewer"]
+    },
+    "Team Statistics": {
+        "file": "pages/3_Team_Statistics.py",
+        "authorities": ["Owner", "Admin", "Scouter", "Viewer"]
+    },
+    "Match Prediction": {
+        "file": "pages/4_Match_Prediction.py",
+        "authorities": ["Owner", "Admin", "Scouter", "Viewer"]
+    },
+    "TBA Integration": {
+        "file": "pages/5_TBA_Integration.py",
+        "authorities": ["Owner", "Admin", "Scouter", "Viewer"]
+    },
+    "Match Schedule": {
+        "file": "pages/6_Match_Schedule.py",
+        "authorities": ["Owner", "Admin"]
+    },
+    "Data Management": {
+        "file": "pages/7_Data_Management.py",
+        "authorities": ["Owner", "Admin"]
+    }
+}
+
+def setup_sidebar_navigation():
+    """Set up the sidebar navigation for all pages."""
+    # Hide Streamlit's default menu, footer, and default sidebar navigation
+    hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    /* Hide the default Streamlit sidebar navigation */
+    div[data-testid="stSidebarNav"] {display: none;}
+    /* Ensure non-selected pages are not bold */
+    div[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] span {
+        font-weight: normal !important;
+    }
+    </style>
+    """
+    st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+    with st.sidebar:
+        # Only show navigation if the user is logged in
+        if "logged_in" in st.session_state and st.session_state.logged_in:
+            st.write(f"Logged in as: **{st.session_state.username}** ({st.session_state.authority})")
+            if st.button("Logout"):
+                # Clear session state
+                st.session_state.logged_in = False
+                st.session_state.username = None
+                st.session_state.authority = None
+                st.session_state.active_page = "Main"
+                st.success("Logged out successfully")
+                # Redirect to the Main page
+                st.switch_page("main.py")
+
+            # Filter pages based on the user's authority
+            accessible_pages = [
+                page for page, config in PAGE_CONFIG.items()
+                if st.session_state.authority in config["authorities"]
+            ]
+
+            # Create a list of clickable links for navigation
+            if accessible_pages:
+                for page in accessible_pages:
+                    page_file = PAGE_CONFIG[page]["file"]
+                    st.page_link(page_file, label=page)
+            else:
+                st.warning("You do not have access to any pages.")
+                st.session_state.active_page = "Main"
+        else:
+            # If not logged in, show nothing in the sidebar (or a minimal message)
+            st.write("")  # Empty string to clear the sidebar
 
 db = None
 COLLECTION_NAME = "scouting_data"

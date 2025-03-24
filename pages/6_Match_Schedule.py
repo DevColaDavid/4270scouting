@@ -4,8 +4,32 @@ import requests
 import pandas as pd
 from datetime import datetime
 import pytz
+from utils.utils import setup_sidebar_navigation
 
-st.set_page_config(page_title="Match Schedule", page_icon="📅", layout="wide")
+st.set_page_config(page_title="Match Schedule", page_icon="📅", layout="wide",initial_sidebar_state="collapsed")
+
+# Check if the user is logged in
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.error("Please log in to access this page.")
+    st.stop()
+
+# Set up the sidebar navigation
+setup_sidebar_navigation()
+
+# Page content
+st.title("Data Management")
+st.write("This is the Data Management page.")
+
+# Check if the user is logged in and has the appropriate authority
+if not st.session_state.get("logged_in", False):
+    st.error("You must be logged in to access this page.")
+    st.stop()
+
+# Check user authority
+allowed_authorities = ["Scouter", "Admin", "Owner","Viewer"]
+if st.session_state.get("authority") not in allowed_authorities:
+    st.error("You do not have the required authority to access this page. Required: Scouter, Admin, or Owner.")
+    st.stop()
 
 st.title("📅 Match Schedule")
 st.markdown("View the match schedule for a specific event to plan your scouting.")

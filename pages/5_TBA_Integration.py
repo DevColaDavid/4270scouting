@@ -5,8 +5,21 @@ import requests
 from datetime import datetime
 import time
 from utils.tba_api import get_team_info, get_team_events, get_event_teams, get_event_matches, search_teams, get_tba_api_key
+from utils.utils import setup_sidebar_navigation
 
-st.set_page_config(page_title="TBA Data", page_icon="🔍", layout="wide")
+st.set_page_config(page_title="TBA Data", page_icon="🔍", layout="wide",initial_sidebar_state="collapsed")
+
+# Check if the user is logged in
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.error("Please log in to access this page.")
+    st.stop()
+
+# Set up the sidebar navigation
+setup_sidebar_navigation()
+
+# Page content
+st.title("TBA Integration")
+st.write("This is the TBA Integration page.")
 
 st.title("TBA Data")
 

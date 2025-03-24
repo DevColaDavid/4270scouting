@@ -1,8 +1,34 @@
+# pages/1_Match_Scouting.py
 import streamlit as st
 from utils.form_config import MATCH_INFO, AUTONOMOUS, TELEOP, ENDGAME, PERFORMANCE_RATINGS, ANALYSIS, MATCH_OUTCOME, STRATEGY
 from utils.utils import save_data
+from utils.utils import setup_sidebar_navigation
 
-st.set_page_config(page_title="Match Scouting", page_icon="📝", layout="wide")
+st.set_page_config(page_title="Match Scouting", page_icon="📝", layout="wide",initial_sidebar_state="collapsed")
+
+# Check if the user is logged in
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.error("Please log in to access this page.")
+    st.stop()
+
+# Set up the sidebar navigation
+setup_sidebar_navigation()
+
+# Page content
+st.title("Match Scouting")
+st.write("This is the Match Scouting page.")
+# Add your Match Scouting form or content here
+
+# Check if the user is logged in and has the appropriate authority
+if not st.session_state.get("logged_in", False):
+    st.error("You must be logged in to access this page.")
+    st.stop()
+
+# Check user authority
+allowed_authorities = ["Scouter", "Admin", "Owner"]
+if st.session_state.get("authority") not in allowed_authorities:
+    st.error("You do not have the required authority to access this page. Required: Scouter, Admin, or Owner.")
+    st.stop()
 
 # Custom CSS for button styling only
 st.markdown("""

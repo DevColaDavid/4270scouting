@@ -1,15 +1,17 @@
-# main.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from utils.utils import load_data, calculate_match_score
+import firebase_admin
+from firebase_admin import credentials, firestore
+import hashlib
+from utils.utils import load_data, calculate_match_score, setup_sidebar_navigation, PAGE_CONFIG
 
-# Set page configuration
+# Set page configuration as the first command
 st.set_page_config(
     page_title="FRC 2025 Scouting Dashboard",
     page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="collapsed", 
+    initial_sidebar_state="collapsed",
     menu_items={
         'Get Help': None,
         'Report a bug': None,
@@ -24,26 +26,130 @@ if 'websocket_retry_counter' not in st.session_state:
 # Disable websocket warning messages
 st.set_option('client.showErrorDetails', False)
 
-# Hide Streamlit's default menu and footer for cleaner mobile view
-hide_streamlit_style = """
-<style>
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-</style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+# Initialize Firebase
+try:
+    firebase_creds = {
+        "type": st.secrets["firebase"]["type"],
+        "project_id": st.secrets["firebase"]["project_id"],
+        "private_key_id": st.secrets["firebase"]["private_key_id"],
+        "private_key": st.secrets["firebase"]["private_key"],
+        "client_email": st.secrets["firebase"]["client_email"],
+        "client_id": st.secrets["firebase"]["client_id"],
+        "auth_uri": st.secrets["firebase"]["auth_uri"],
+        "token_uri": st.secrets["firebase"]["token_uri"],
+        "auth_provider_x509_cert_url": st.secrets["firebase"]["auth_provider_x509_cert_url"],
+        "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
+    }
+    if not firebase_admin._apps:
+        cred = credentials.Certificate(firebase_creds)
+        firebase_admin.initialize_app(cred)
+except KeyError as e:
+    st.error(f"Firebase credentials not found in secrets.toml: {e}")
+    st.stop()
+except Exception as e:
+    st.error(f"Error initializing Firebase: {e}")
+    st.stop()
 
-# Main content
+db = firestore.client()
+
+# Function to hash passwords
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# Initialize session state for login
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = None
+if "authority" not in st.session_state:
+    st.session_state.authority = None
+if "active_page" not in st.session_state:
+    st.session_state.active_page = "Main"  # Default to "Main" for the main page
+
+# Check if the users collection is empty and create an initial Owner user
+def initialize_owner_user():
+    users_ref = db.collection('users').limit(1).get()
+    if not users_ref:  # If the users collection is empty
+        initial_owner = {
+            "username": "Owner",
+            "password": hash_password("ownerpass123"),  # Default password, change it after first login
+            "authority": "Owner"
+        }
+        db.collection('users').document("initial_owner").set(initial_owner)
+        st.warning("No users found in Firestore. Created an initial Owner user with username 'Owner' and password 'ownerpass123'. Please log in and change the password immediately.")
+
+# Call the function to initialize the Owner user
+initialize_owner_user()
+
+# Login function using Firestore
+def login(username, password):
+    hashed_password = hash_password(password)
+    try:
+        # Query the users collection for the username
+        users_ref = db.collection('users').where('username', '==', username).limit(1).get()
+        if not users_ref:
+            st.error("Invalid username or password")
+            return
+        user_doc = users_ref[0].to_dict()
+        if user_doc['password'] == hashed_password:
+            st.session_state.logged_in = True
+            st.session_state.username = username
+            st.session_state.authority = user_doc['authority']
+            st.success(f"Logged in as {username} ({st.session_state.authority})")
+            st.rerun()
+        else:
+            st.error("Invalid username or password")
+    except Exception as e:
+        st.error(f"Error during login: {e}")
+
+# If not logged in, show the login form
+if not st.session_state.logged_in:
+    # Set up the sidebar navigation (will be empty since user is not logged in)
+    setup_sidebar_navigation()
+    
+    st.title("🔒 Login to FRC 2025 Scouting Dashboard")
+    with st.form(key="login_form"):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submit_button = st.form_submit_button("Login")
+        if submit_button:
+            login(username, password)
+    st.stop()
+
+# Set up the sidebar navigation (only runs if user is logged in)
+setup_sidebar_navigation()
+
+# Main content (only shown on the "Main" page)
 st.title("FRC 2025 Scouting Dashboard")
-st.markdown("""
-Welcome to the FRC 2025 Scouting Dashboard! This tool helps teams collect and analyze match data.
-
-### Features:
-- Match Scouting Form
-- Data Analysis Dashboard
-- Team Statistics
-- Export Capabilities
+st.markdown(f"""
+Welcome to the FRC 2025 Scouting Dashboard, {st.session_state.username}! This tool helps teams collect and analyze match data.
 """)
+
+# Display features based on accessible pages
+accessible_pages = [
+    page for page, config in PAGE_CONFIG.items()
+    if st.session_state.authority in config["authorities"]
+]
+if accessible_pages:
+    st.markdown("### Features:")
+    features = {
+        "Match Scouting": "Match Scouting Form: Available to Scouters, Admins, and Owners.",
+        "Data Analysis": "Data Analysis Dashboard: Available to all users.",
+        "Team Statistics": "Team Statistics: Available to all users.",
+        "Match Prediction": "Match Prediction: Available to all users.",
+        "TBA Integration": "TBA Integration: Available to all users.",
+        "Match Schedule": "Match Schedule: Available to Admins and Owners.",
+        "Data Management": "Data Management: Available to Admins and Owners.",
+        "User Management": "User Management: Available to Owners only (in Data Management)."
+    }
+    for page, description in features.items():
+        # Only show features for pages the user can access
+        # Special case for User Management, which is part of Data Management
+        if page == "User Management":
+            if "Data Management" in accessible_pages and st.session_state.authority == "Owner":
+                st.markdown(f"- {description}")
+        elif page in accessible_pages and page != "Main":
+            st.markdown(f"- {description}")
 
 # Display recent matches
 def display_recent_matches():
@@ -136,6 +242,6 @@ def display_quick_stats():
     except Exception as e:
         st.error(f"Error loading statistics: {str(e)}")
 
-# App Layout
+# App Layout (only shown on the "Main" page)
 display_quick_stats()
 display_recent_matches()

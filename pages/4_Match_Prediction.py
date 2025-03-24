@@ -3,8 +3,21 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 from utils.utils import load_data, calculate_match_score
+from utils.utils import setup_sidebar_navigation
 
-st.set_page_config(page_title="Match Prediction", page_icon="📉", layout="wide")
+st.set_page_config(page_title="Match Prediction", page_icon="📉", layout="wide",initial_sidebar_state="collapsed")
+
+# Check if the user is logged in
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.error("Please log in to access this page.")
+    st.stop()
+
+# Set up the sidebar navigation
+setup_sidebar_navigation()
+
+# Page content
+st.title("Match Prediction")
+st.write("This is the Match Prediction page.")
 
 st.title("📉 Match Prediction")
 st.markdown("Predict the outcome of a match based on historical scouting data.")
