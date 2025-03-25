@@ -37,7 +37,7 @@ PAGE_CONFIG = {
     },
     "Match Schedule": {
         "file": "pages/6_Match_Schedule.py",
-        "authorities": ["Owner", "Admin"]
+        "authorities": ["Owner", "Admin", "Scouter", "Viewer"]
     },
     "Data Management": {
         "file": "pages/7_Data_Management.py",
