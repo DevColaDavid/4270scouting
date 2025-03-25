@@ -1,0 +1,813 @@
+# pages/1_Scouting_Form.py
+import streamlit as st
+from utils.form_config import MATCH_INFO, AUTONOMOUS, TELEOP, ENDGAME, PERFORMANCE_RATINGS, ANALYSIS, MATCH_OUTCOME, STRATEGY
+from utils.form_config import PIT_INFO, ROBOT_SPECIFICATIONS, CAPABILITIES, PIT_STRATEGY, PIT_NOTES
+from utils.utils import save_data, setup_sidebar_navigation, upload_photo_to_storage, get_firebase_instances
+
+# Set page configuration
+st.set_page_config(
+    page_title="Scouting Form",
+    page_icon="📝",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# Initialize Firebase
+try:
+    db, bucket = get_firebase_instances()
+    st.session_state.firebase_db = db
+    st.session_state.firebase_bucket = bucket
+except Exception as e:
+    st.error(f"Failed to initialize Firebase: {str(e)}")
+    st.stop()
+
+# Check if the user is logged in
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.error("Please log in to access this page.")
+    st.stop()
+
+# Set up the sidebar navigation
+setup_sidebar_navigation()
+
+# Check user authority
+allowed_authorities = ["Scouter", "Admin", "Owner"]
+if st.session_state.get("authority") not in allowed_authorities:
+    st.error("You do not have the required authority to access this page. Required: Scouter, Admin, or Owner.")
+    st.stop()
+
+# Custom CSS for button styling (shared for both tabs)
+st.markdown("""
+    <style>
+    .stNumberInput, .stTextInput, .stSelectbox, .stCheckbox, .stSlider, .stTextArea {
+        margin-bottom: 15px;
+    }
+    /* Style for the Submit buttons */
+    button[kind="primary"][key="match_submit_button"],
+    button[kind="primary"][key="pit_submit_button"] {
+        background-color: #007BFF; /* Blue */
+        color: white;
+        border-radius: 5px;
+        border: none;
+        padding: 10px 20px;
+    }
+    button[kind="primary"][key="match_submit_button"]:hover,
+    button[kind="primary"][key="pit_submit_button"]:hover {
+        background-color: #0056b3; /* Darker blue on hover */
+    }
+    /* Style for the Clear Form buttons */
+    button[kind="primary"][key="match_clear_button"],
+    button[kind="primary"][key="pit_clear_button"] {
+        background-color: #DC3545; /* Red */
+        color: white;
+        border-radius: 5px;
+        border: none;
+        padding: 10px 20px;
+    }
+    button[kind="primary"][key="match_clear_button"]:hover,
+    button[kind="primary"][key="pit_clear_button"]:hover {
+        background-color: #b02a37; /* Darker red on hover */
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# Page content
+st.title("📝 Scouting Form")
+st.markdown("Use the tabs below to submit Match Scouting or Pit Scouting data.")
+
+# Create tabs for Match Scouting and Pit Scouting
+match_tab, pit_tab = st.tabs(["Match Scouting", "Pit Scouting"])
+
+# --- Match Scouting Tab ---
+with match_tab:
+    st.markdown("Fill out the form below to scout a match.")
+
+    # Initialize session state for Match Scouting form
+    if 'match_form_data' not in st.session_state:
+        st.session_state.match_form_data = {}
+    if 'match_form_cleared' not in st.session_state:
+        st.session_state.match_form_cleared = False
+
+    # Function to get the current value of a field, considering form clearing
+    def get_match_field_value(name, default_value):
+        if st.session_state.match_form_cleared:
+            # Preserve scouter_name and alliance_color
+            if name in ["scouter_name", "alliance_color"]:
+                return st.session_state.match_form_data.get(name, default_value)
+            # Special case for team_number, match_number, starting_position, match_outcome, primary_role: default to None
+            if name in ["team_number", "match_number", "starting_position", "match_outcome", "primary_role"]:
+                return None
+            return default_value
+        # Special case for team_number, match_number, alliance_color, starting_position, match_outcome, primary_role: default to None if not set
+        if name in ["team_number", "match_number", "alliance_color", "starting_position", "match_outcome", "primary_role"] and name not in st.session_state.match_form_data:
+            return None
+        return st.session_state.match_form_data.get(name, default_value)
+
+    # Callback function to update session state when a number input changes
+    def update_match_number_input(name):
+        st.session_state.match_form_data[name] = st.session_state[name]
+
+    # Form data dictionary for Match Scouting
+    match_form_data = {}
+
+    # Match Info Section (Blue: #007BFF)
+    st.markdown('<div style="color: #007BFF; font-size: 24px; font-weight: bold; margin-bottom: 10px">Match Information</div>', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        for item in MATCH_INFO['basic_info'][:2]:  # Team Number, Match Number
+            name = item['name']
+            match_form_data[name] = st.number_input(
+                item["label"],
+                min_value=1,
+                step=1,
+                key=f"match_{name}",
+                value=get_match_field_value(name, None),
+                on_change=update_match_number_input,
+                args=(name,)
+            )
+    with col2:
+        # Alliance Color
+        for item in MATCH_INFO['basic_info'][2:3]:  # Alliance Color (index 2)
+            name = item['name']
+            options = item['options']
+            current_value = get_match_field_value(name, None)
+            display_options = [None] + options
+            def format_option(value):
+                if value is None:
+                    return "Choose an option"
+                return value
+            if current_value is None:
+                index = 0
+            else:
+                index = options.index(current_value) + 1
+            selected_value = st.selectbox(
+                item["label"],
+                options=display_options,
+                index=index,
+                key=f"match_{name}",
+                format_func=format_option
+            )
+            match_form_data[name] = selected_value if selected_value is not None else None
+
+        # Starting Position
+        item = MATCH_INFO['starting_position']
+        name = item['name']
+        options = item['options']
+        current_value = get_match_field_value(name, None)
+        display_options = [None] + options
+        def format_option(value):
+            if value is None:
+                return "Choose an option"
+            return value
+        if current_value is None:
+            index = 0
+        else:
+            index = options.index(current_value) + 1
+        selected_value = st.selectbox(
+            item["label"],
+            options=display_options,
+            index=index,
+            key=f"match_{name}",
+            format_func=format_option
+        )
+        match_form_data[name] = selected_value if selected_value is not None else None
+
+    with col3:
+        # Scouter Name
+        for item in MATCH_INFO['basic_info'][3:4]:  # Scouter Name (index 3)
+            name = item['name']
+            match_form_data[name] = st.text_input(
+                item["label"],
+                key=f"match_{name}",
+                value=get_match_field_value(name, "")
+            )
+
+    # Horizontal line after Match Info (Blue: #007BFF)
+    st.markdown('<hr style="border-top: 5px solid #007BFF; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Autonomous Section (Green: #28A745)
+    st.markdown('<div style="color: #28A745; font-size: 24px; font-weight: bold; margin-bottom: 10px">Autonomous Period</div>', unsafe_allow_html=True)
+    # Mobility at the start
+    col1, col2, col3 = st.columns([1, 2, 2])
+    with col1:
+        st.markdown("**Mobility**")
+        for mobility_item in AUTONOMOUS['mobility']:
+            name = mobility_item['name']
+            match_form_data[name] = st.checkbox(
+                mobility_item["label"],
+                key=f"match_{name}",
+                value=get_match_field_value(name, False)
+            )
+    with col2:
+        pass  # Empty column for spacing
+    with col3:
+        pass  # Empty column for spacing
+
+    # Scoring and Missed Attempts side by side
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Coral Scored**")
+        for scoring_item in AUTONOMOUS['scoring']:
+            name = scoring_item['name']
+            match_form_data[name] = st.number_input(
+                scoring_item["label"],
+                min_value=0,
+                value=get_match_field_value(name, 0),
+                step=1,
+                key=f"match_{name}",
+                on_change=update_match_number_input,
+                args=(name,)
+            )
+    with col2:
+        st.markdown("**Coral Missed**")
+        for missed_item in AUTONOMOUS['missed_attempts']:
+            name = missed_item['name']
+            match_form_data[name] = st.number_input(
+                missed_item["label"],
+                min_value=0,
+                value=get_match_field_value(name, 0),
+                step=1,
+                key=f"match_{name}",
+                on_change=update_match_number_input,
+                args=(name,)
+            )
+
+    # Algae Management
+    col1, col2, col3 = st.columns([2, 2, 1])
+    with col1:
+        st.markdown("**Algae Scored**")
+        for algae_item in AUTONOMOUS['algae_management'][:2]:  # Algae to Barge, Processor
+            name = algae_item['name']
+            match_form_data[name] = st.number_input(
+                algae_item["label"],
+                min_value=0,
+                value=get_match_field_value(name, 0),
+                step=1,
+                key=f"match_{name}",
+                on_change=update_match_number_input,
+                args=(name,)
+            )
+    with col2:
+        st.markdown("**Algae Missed**")
+        for algae_item in AUTONOMOUS['algae_management'][2:4]:  # Missed Algae to Barge, Processor
+            name = algae_item['name']
+            match_form_data[name] = st.number_input(
+                algae_item["label"],
+                min_value=0,
+                value=get_match_field_value(name, 0),
+                step=1,
+                key=f"match_{name}",
+                on_change=update_match_number_input,
+                args=(name,)
+            )
+    with col3:
+        st.markdown("**Algae Removed**")
+        for algae_item in AUTONOMOUS['algae_management'][4:5]:  # Algae Removed
+            name = algae_item['name']
+            match_form_data[name] = st.number_input(
+                algae_item["label"],
+                min_value=0,
+                value=get_match_field_value(name, 0),
+                step=1,
+                key=f"match_{name}",
+                on_change=update_match_number_input,
+                args=(name,)
+            )
+
+    # Horizontal line after Autonomous (Green: #28A745)
+    st.markdown('<hr style="border-top: 5px solid #28A745; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Teleop Section (Orange: #FD7E14)
+    st.markdown('<div style="color: #FD7E14; font-size: 24px; font-weight: bold; margin-bottom: 10px">Teleop Period</div>', unsafe_allow_html=True)
+    # Scoring and Missed Attempts side by side
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Coral Scored**")
+        for scoring_item in TELEOP['scoring']:
+            name = scoring_item['name']
+            match_form_data[name] = st.number_input(
+                scoring_item["label"],
+                min_value=0,
+                value=get_match_field_value(name, 0),
+                step=1,
+                key=f"match_{name}",
+                on_change=update_match_number_input,
+                args=(name,)
+            )
+    with col2:
+        st.markdown("**Coral Missed**")
+        for missed_item in TELEOP['missed_attempts']:
+            name = missed_item['name']
+            match_form_data[name] = st.number_input(
+                missed_item["label"],
+                min_value=0,
+                value=get_match_field_value(name, 0),
+                step=1,
+                key=f"match_{name}",
+                on_change=update_match_number_input,
+                args=(name,)
+            )
+
+    # Algae Management
+    col1, col2, col3 = st.columns([2, 2, 1])
+    with col1:
+        st.markdown("**Algae Scored**")
+        for algae_item in TELEOP['algae_management'][:2]:  # Algae to Barge, Processor
+            name = algae_item['name']
+            match_form_data[name] = st.number_input(
+                algae_item["label"],
+                min_value=0,
+                value=get_match_field_value(name, 0),
+                step=1,
+                key=f"match_{name}",
+                on_change=update_match_number_input,
+                args=(name,)
+            )
+    with col2:
+        st.markdown("**Algae Missed**")
+        for algae_item in TELEOP['algae_management'][2:4]:  # Missed Algae to Barge, Processor
+            name = algae_item['name']
+            match_form_data[name] = st.number_input(
+                algae_item["label"],
+                min_value=0,
+                value=get_match_field_value(name, 0),
+                step=1,
+                key=f"match_{name}",
+                on_change=update_match_number_input,
+                args=(name,)
+            )
+    with col3:
+        st.markdown("**Algae Removed**")
+        for algae_item in TELEOP['algae_management'][4:5]:  # Algae Removed
+            name = algae_item['name']
+            match_form_data[name] = st.number_input(
+                algae_item["label"],
+                min_value=0,
+                value=get_match_field_value(name, 0),
+                step=1,
+                key=f"match_{name}",
+                on_change=update_match_number_input,
+                args=(name,)
+            )
+
+    # Horizontal line after Teleop (Orange: #FD7E14)
+    st.markdown('<hr style="border-top: 5px solid #FD7E14; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Endgame Section (Purple: #6F42C1)
+    st.markdown('<div style="color: #6F42C1; font-size: 24px; font-weight: bold; margin-bottom: 10px">Endgame</div>', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 2])
+    with col1:
+        item = ENDGAME['climb_status']
+        name = item['name']
+        options = item['options']
+        default_index = 0
+        current_value = get_match_field_value(name, options[default_index])
+        if current_value not in options:
+            current_value = options[default_index]
+        match_form_data[name] = st.selectbox(
+            item["label"],
+            options=options,
+            index=options.index(current_value),
+            key=f"match_{name}"
+        )
+    with col2:
+        pass  # Empty column for spacing
+    with col3:
+        pass  # Empty column for spacing
+
+    # Horizontal line after Endgame (Purple: #6F42C1)
+    st.markdown('<hr style="border-top: 5px solid #6F42C1; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Performance Ratings Section (Teal: #20C997)
+    st.markdown('<div style="color: #20C997; font-size: 24px; font-weight: bold; margin-bottom: 10px">Performance Ratings</div>', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
+    for idx, rating_item in enumerate(PERFORMANCE_RATINGS['ratings']):
+        with [col1, col2, col3][idx % 3]:
+            name = rating_item['name']
+            match_form_data[name] = st.slider(
+                rating_item["label"],
+                min_value=rating_item['min'],
+                max_value=rating_item['max'],
+                value=get_match_field_value(name, 3),
+                step=1,
+                key=f"match_{name}"
+            )
+
+    # Horizontal line after Performance Ratings (Teal: #20C997)
+    st.markdown('<hr style="border-top: 5px solid #20C997; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Strategy Section (Indigo: #6610F2)
+    st.markdown('<div style="color: #6610F2; font-size: 24px; font-weight: bold; margin-bottom: 10px">Strategy</div>', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 2])
+    with col1:
+        item = STRATEGY['primary_role']
+        name = item['name']
+        options = item['options']
+        current_value = get_match_field_value(name, None)
+        display_options = [None] + options
+        def format_option(value):
+            if value is None:
+                return "Choose an option"
+            return value
+        if current_value is None:
+            index = 0
+        else:
+            index = options.index(current_value) + 1
+        selected_value = st.selectbox(
+            item["label"],
+            options=display_options,
+            index=index,
+            key=f"match_{name}",
+            format_func=format_option,
+            help=item.get('help', '')
+        )
+        match_form_data[name] = selected_value if selected_value is not None else None
+    with col2:
+        pass  # Empty column for spacing
+    with col3:
+        pass  # Empty column for spacing
+
+    # Horizontal line after Strategy (Indigo: #6610F2)
+    st.markdown('<hr style="border-top: 5px solid #6610F2; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Analysis Section (Cyan: #17A2B8)
+    st.markdown('<div style="color: #17A2B8; font-size: 24px; font-weight: bold; margin-bottom: 10px">Qualitative Analysis</div>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    for idx, question_item in enumerate(ANALYSIS['questions']):
+        with [col1, col2][idx % 2]:
+            name = question_item['name']
+            match_form_data[name] = st.text_area(
+                question_item["label"],
+                help=question_item.get('help', ''),
+                key=f"match_{name}",
+                value=get_match_field_value(name, "")
+            )
+
+    # Horizontal line after Analysis (Cyan: #17A2B8)
+    st.markdown('<hr style="border-top: 5px solid #17A2B8; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Match Outcome Section (Red: #DC3545)
+    st.markdown('<div style="color: #DC3545; font-size: 24px; font-weight: bold; margin-bottom: 10px">Match Outcome</div>', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 2])
+    with col1:
+        item = MATCH_OUTCOME['outcome']
+        name = item['name']
+        options = item['options']
+        current_value = get_match_field_value(name, None)
+        display_options = [None] + options
+        def format_option(value):
+            if value is None:
+                return "Choose an option"
+            return value
+        if current_value is None:
+            index = 0
+        else:
+            index = options.index(current_value) + 1
+        selected_value = st.selectbox(
+            item["label"],
+            options=display_options,
+            index=index,
+            key=f"match_{name}",
+            format_func=format_option,
+            help=item.get('help', '')
+        )
+        match_form_data[name] = selected_value if selected_value is not None else None
+    with col2:
+        pass  # Empty column for spacing
+    with col3:
+        pass  # Empty column for spacing
+
+    # Horizontal line after Match Outcome (Red: #DC3545)
+    st.markdown('<hr style="border-top: 5px solid #DC3545; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Submit and Clear buttons for Match Scouting
+    col1, col2 = st.columns(2)
+    with col1:
+        match_submit_button = st.button(label="Submit Match Data", key="match_submit_button")
+    with col2:
+        match_clear_button = st.button(label="Clear Form", key="match_clear_button")
+
+    # Update session state with the current form data
+    st.session_state.match_form_data = match_form_data
+
+    # Handle form submission for Match Scouting
+    if match_submit_button:
+        # Validate required fields
+        if not match_form_data.get("team_number") or match_form_data["team_number"] <= 0:
+            st.error("Please enter a valid team number.")
+        elif not match_form_data.get("match_number") or match_form_data["match_number"] <= 0:
+            st.error("Please enter a valid match number.")
+        elif not match_form_data.get("scouter_name"):
+            st.error("Please enter the scouter's name.")
+        elif not match_form_data.get("alliance_color"):
+            st.error("Please select an alliance color.")
+        elif not match_form_data.get("starting_position"):
+            st.error("Please select a starting position.")
+        elif not match_form_data.get("match_outcome"):
+            st.error("Please select the match outcome.")
+        elif not match_form_data.get("primary_role"):
+            st.error("Please select the team's primary role.")
+        else:
+            # Save data to Firestore
+            doc_id = save_data("match_scout_data", match_form_data)
+            if doc_id:
+                st.success(f"Match data submitted successfully! Document ID: {doc_id}")
+                st.balloons()
+                preserved_data = {
+                    "scouter_name": match_form_data.get("scouter_name", ""),
+                    "alliance_color": match_form_data.get("alliance_color", None)
+                }
+                st.session_state.match_form_data = preserved_data
+                st.session_state.match_form_cleared = True
+            else:
+                st.error("Failed to submit match data.")
+
+    # Handle form clearing for Match Scouting
+    if match_clear_button:
+        preserved_data = {
+            "scouter_name": st.session_state.match_form_data.get("scouter_name", ""),
+            "alliance_color": st.session_state.match_form_data.get("alliance_color", None)
+        }
+        st.session_state.match_form_data = preserved_data
+        st.session_state.match_form_cleared = True
+
+    # Reset the form_cleared state after clearing
+    if st.session_state.match_form_cleared and not match_submit_button and not match_clear_button:
+        st.session_state.match_form_cleared = False
+
+# --- Pit Scouting Tab ---
+with pit_tab:
+    st.markdown("Fill out the form below to scout a team in the pit.")
+
+    # Initialize session state for Pit Scouting form
+    if 'pit_form_data' not in st.session_state:
+        st.session_state.pit_form_data = {}
+    if 'pit_form_cleared' not in st.session_state:
+        st.session_state.pit_form_cleared = False
+
+    # Function to get the current value of a field, considering form clearing
+    def get_pit_field_value(name, default_value):
+        if st.session_state.pit_form_cleared:
+            # Preserve scouter_name
+            if name == "scouter_name":
+                return st.session_state.pit_form_data.get(name, default_value)
+            # Special case for team_number, drivetrain_type, endgame_capability, preferred_role: default to None
+            if name in ["team_number", "drivetrain_type", "endgame_capability", "preferred_role"]:
+                return None
+            return default_value
+        # Special case for team_number, drivetrain_type, endgame_capability, preferred_role: default to None if not set
+        if name in ["team_number", "drivetrain_type", "endgame_capability", "preferred_role"] and name not in st.session_state.pit_form_data:
+            return None
+        return st.session_state.pit_form_data.get(name, default_value)
+
+    # Callback function to update session state when a number input changes
+    def update_pit_number_input(name):
+        st.session_state.pit_form_data[name] = st.session_state[name]
+
+    # Form data dictionary for Pit Scouting
+    pit_form_data = {}
+
+    # Team Information Section (Blue: #007BFF)
+    st.markdown('<div style="color: #007BFF; font-size: 24px; font-weight: bold; margin-bottom: 10px">Team Information</div>', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        for item in PIT_INFO['basic_info'][:1]:  # Team Number
+            name = item['name']
+            pit_form_data[name] = st.number_input(
+                item["label"],
+                min_value=1,
+                step=1,
+                key=f"pit_{name}",
+                value=get_pit_field_value(name, None),
+                on_change=update_pit_number_input,
+                args=(name,)
+            )
+    with col2:
+        for item in PIT_INFO['basic_info'][1:2]:  # Scouter Name
+            name = item['name']
+            pit_form_data[name] = st.text_input(
+                item["label"],
+                key=f"pit_{name}",
+                value=get_pit_field_value(name, "")
+            )
+    with col3:
+        pass  # Empty column for spacing
+
+    # Horizontal line after Team Information (Blue: #007BFF)
+    st.markdown('<hr style="border-top: 5px solid #007BFF; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Robot Specifications Section (Green: #28A745)
+    st.markdown('<div style="color: #28A745; font-size: 24px; font-weight: bold; margin-bottom: 10px">Robot Specifications</div>', unsafe_allow_html=True)
+    # Drivetrain
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        item = ROBOT_SPECIFICATIONS['drivetrain']
+        name = item['name']
+        options = item['options']
+        current_value = get_pit_field_value(name, None)
+        display_options = [None] + options
+        def format_option(value):
+            if value is None:
+                return "Choose an option"
+            return value
+        if current_value is None:
+            index = 0
+        else:
+            index = options.index(current_value) + 1
+        selected_value = st.selectbox(
+            item["label"],
+            options=display_options,
+            index=index,
+            key=f"pit_{name}",
+            format_func=format_option
+        )
+        pit_form_data[name] = selected_value if selected_value is not None else None
+    with col2:
+        pass  # Empty column for spacing
+    with col3:
+        pass  # Empty column for spacing
+
+    # Horizontal line after Robot Specifications (Green: #28A745)
+    st.markdown('<hr style="border-top: 5px solid #28A745; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Capabilities Section (Orange: #FD7E14)
+    st.markdown('<div style="color: #FD7E14; font-size: 24px; font-weight: bold; margin-bottom: 10px">Capabilities</div>', unsafe_allow_html=True)
+    # Scoring Capabilities
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Coral Scoring**")
+        for item in CAPABILITIES['scoring']:
+            name = item['name']
+            pit_form_data[name] = st.checkbox(
+                item["label"],
+                key=f"pit_{name}",
+                value=get_pit_field_value(name, False)
+            )
+    with col2:
+        st.markdown("**Algae Management**")
+        for item in CAPABILITIES['algae_management']:
+            name = item['name']
+            pit_form_data[name] = st.checkbox(
+                item["label"],
+                key=f"pit_{name}",
+                value=get_pit_field_value(name, False)
+            )
+
+    # Endgame Capability
+    col1, col2, col3 = st.columns([1, 2, 2])
+    with col1:
+        item = CAPABILITIES['endgame']
+        name = item['name']
+        options = item['options']
+        current_value = get_pit_field_value(name, None)
+        display_options = [None] + options
+        def format_option(value):
+            if value is None:
+                return "Choose an option"
+            return value
+        if current_value is None:
+            index = 0
+        else:
+            index = options.index(current_value) + 1
+        selected_value = st.selectbox(
+            item["label"],
+            options=display_options,
+            index=index,
+            key=f"pit_{name}",
+            format_func=format_option
+        )
+        pit_form_data[name] = selected_value if selected_value is not None else None
+    with col2:
+        pass  # Empty column for spacing
+    with col3:
+        pass  # Empty column for spacing
+
+    # Horizontal line after Capabilities (Orange: #FD7E14)
+    st.markdown('<hr style="border-top: 5px solid #FD7E14; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Strategy Section (Indigo: #6610F2)
+    st.markdown('<div style="color: #6610F2; font-size: 24px; font-weight: bold; margin-bottom: 10px">Strategy</div>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        item = PIT_STRATEGY['preferred_role']
+        name = item['name']
+        options = item['options']
+        current_value = get_pit_field_value(name, None)
+        display_options = [None] + options
+        def format_option(value):
+            if value is None:
+                return "Choose an option"
+            return value
+        if current_value is None:
+            index = 0
+        else:
+            index = options.index(current_value) + 1
+        selected_value = st.selectbox(
+            item["label"],
+            options=display_options,
+            index=index,
+            key=f"pit_{name}",
+            format_func=format_option,
+            help=item.get('help', '')
+        )
+        pit_form_data[name] = selected_value if selected_value is not None else None
+    with col2:
+        item = PIT_STRATEGY['auto_strategy']
+        name = item['name']
+        pit_form_data[name] = st.text_area(
+            item["label"],
+            help=item.get('help', ''),
+            key=f"pit_{name}",
+            value=get_pit_field_value(name, "")
+        )
+
+    # Horizontal line after Strategy (Indigo: #6610F2)
+    st.markdown('<hr style="border-top: 5px solid #6610F2; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Robot Photo Section (Purple: #800080)
+    st.markdown('<div style="color: #800080; font-size: 24px; font-weight: bold; margin-bottom: 10px">Robot Photo</div>', unsafe_allow_html=True)
+    robot_photo = st.file_uploader("Upload a Photo of the Robot", type=["jpg", "jpeg", "png"], key="pit_robot_photo")
+    # Optional: Preview the uploaded photo
+    if robot_photo and not st.session_state.pit_form_cleared:
+        st.image(robot_photo, caption="Uploaded Robot Photo Preview", width=300)
+
+    # Horizontal line after Robot Photo (Purple: #800080)
+    st.markdown('<hr style="border-top: 5px solid #800080; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Notes Section (Cyan: #17A2B8)
+    st.markdown('<div style="color: #17A2B8; font-size: 24px; font-weight: bold; margin-bottom: 10px">Notes</div>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    for idx, question_item in enumerate(PIT_NOTES['questions']):
+        with [col1, col2][idx % 2]:
+            name = question_item['name']
+            pit_form_data[name] = st.text_area(
+                question_item["label"],
+                help=question_item.get('help', ''),
+                key=f"pit_{name}",
+                value=get_pit_field_value(name, "")
+            )
+
+    # Horizontal line after Notes (Cyan: #17A2B8)
+    st.markdown('<hr style="border-top: 5px solid #17A2B8; margin: 20px 0;">', unsafe_allow_html=True)
+
+    # Submit and Clear buttons for Pit Scouting
+    col1, col2 = st.columns(2)
+    with col1:
+        pit_submit_button = st.button(label="Submit Pit Data", key="pit_submit_button")
+    with col2:
+        pit_clear_button = st.button(label="Clear Form", key="pit_clear_button")
+
+    # Update session state with the current form data
+    st.session_state.pit_form_data = pit_form_data
+
+    # Handle form submission for Pit Scouting
+    if pit_submit_button:
+        # Verify Firebase is initialized
+        if 'firebase_db' not in st.session_state or 'firebase_bucket' not in st.session_state:
+            st.error("Firebase is not initialized. Please reload the page.")
+            st.stop()
+        
+        # Validate required fields
+        if not pit_form_data.get("team_number") or pit_form_data["team_number"] <= 0:
+            st.error("Please enter a valid team number.")
+        elif not pit_form_data.get("scouter_name"):
+            st.error("Please enter the scouter's name.")
+        elif not pit_form_data.get("drivetrain_type"):
+            st.error("Please select a drivetrain type.")
+        elif not pit_form_data.get("endgame_capability"):
+            st.error("Please select an endgame capability.")
+        elif not pit_form_data.get("preferred_role"):
+            st.error("Please select the team's preferred role.")
+        else:
+            # Handle photo upload to Firebase Storage
+            if robot_photo:
+                photo_url = upload_photo_to_storage(robot_photo, pit_form_data["team_number"])
+                if photo_url:
+                    pit_form_data["robot_photo_url"] = photo_url
+                    st.success(f"Photo uploaded successfully! URL: {photo_url}")
+                else:
+                    st.warning("Photo upload failed, but form data will still be saved.")
+
+            # Save data to Firestore
+            doc_id = save_data("pit_scout_data", pit_form_data)
+            if doc_id:
+                st.success(f"Pit data submitted successfully! Document ID: {doc_id}")
+                st.balloons()
+                preserved_data = {
+                    "scouter_name": pit_form_data.get("scouter_name", "")
+                }
+                st.session_state.pit_form_data = preserved_data
+                st.session_state.pit_form_cleared = True
+            else:
+                st.error("Failed to submit pit data.")
+
+    # Handle form clearing for Pit Scouting
+    if pit_clear_button:
+        preserved_data = {
+            "scouter_name": st.session_state.pit_form_data.get("scouter_name", "")
+        }
+        st.session_state.pit_form_data = preserved_data
+        st.session_state.pit_form_cleared = True
+
+    # Reset the form_cleared state after clearing
+    if st.session_state.pit_form_cleared and not pit_submit_button and not pit_clear_button:
+        st.session_state.pit_form_cleared = False

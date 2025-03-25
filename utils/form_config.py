@@ -1,4 +1,6 @@
 # utils/form_config.py
+
+# Existing configurations for Match Scouting
 MATCH_INFO = {
     'basic_info': [
         {'name': 'team_number', 'label': 'Team Number', 'type': 'number'},
@@ -88,7 +90,6 @@ PERFORMANCE_RATINGS = {
     ]
 }
 
-# New section for Strategy (Primary Role)
 STRATEGY = {
     'primary_role': {
         'name': 'primary_role',
@@ -105,5 +106,68 @@ ANALYSIS = {
         {'name': 'teleop_qa', 'label': 'Teleop Q/A', 'type': 'textarea', 'help': 'How are they scoring (ground/station), speed, skill?'},
         {'name': 'auto_qa', 'label': 'Autonomous Q/A', 'type': 'textarea', 'help': 'Speed, Path, Accuracy'},
         {'name': 'comments', 'label': 'Additional Comments', 'type': 'textarea'}
+    ]
+}
+
+# Configuration for Pit Scouting
+PIT_INFO = {
+    'basic_info': [
+        {'name': 'team_number', 'label': 'Team Number', 'type': 'number'},
+        {'name': 'scouter_name', 'label': 'Scouter Name', 'type': 'text'},
+    ]
+}
+
+ROBOT_SPECIFICATIONS = {
+    'drivetrain': {
+        'name': 'drivetrain_type',
+        'label': 'Drivetrain Type',
+        'type': 'select',
+        'options': ['Tank', 'Swerve', 'Mecanum', 'Other']
+    }
+}
+
+CAPABILITIES = {
+    'scoring': [
+        {'name': 'can_score_coral_l1', 'label': 'Can Score Coral on L1', 'type': 'checkbox'},
+        {'name': 'can_score_coral_l2', 'label': 'Can Score Coral on L2', 'type': 'checkbox'},
+        {'name': 'can_score_coral_l3', 'label': 'Can Score Coral on L3', 'type': 'checkbox'},
+        {'name': 'can_score_coral_l4', 'label': 'Can Score Coral on L4', 'type': 'checkbox'},
+    ],
+    'algae_management': [
+        {'name': 'can_score_algae_barge', 'label': 'Can Score Algae on Barge', 'type': 'checkbox'},
+        {'name': 'can_score_algae_processor', 'label': 'Can Score Algae on Processor', 'type': 'checkbox'},
+        {'name': 'can_remove_algae_l1', 'label': 'Can Remove Algae from Level 1', 'type': 'checkbox'},
+        {'name': 'can_remove_algae_l2', 'label': 'Can Remove Algae from Level 2', 'type': 'checkbox'}
+    ],
+    'endgame': {
+        'name': 'endgame_capability',
+        'label': 'Endgame Capability',
+        'type': 'select',
+        'options': ['None', 'Shallow Climb', 'Deep Climb', 'Both Shallow and Deep Climb']  # Added "Both" option
+    }
+}
+
+PIT_STRATEGY = {
+    'preferred_role': {
+        'name': 'preferred_role',
+        'label': 'Preferred Role',
+        'type': 'select',
+        'options': ['Offense', 'Defense', 'Both', 'Neither'],
+        'help': "Select the team's preferred role: Offense (focused on scoring), Defense (focused on blocking opponents), Both (balanced), or Neither (minimal activity)."
+    },
+    'auto_strategy': {
+        'name': 'auto_strategy',
+        'label': 'Autonomous Strategy',
+        'type': 'textarea',
+        'help': "Describe the team's autonomous strategy (e.g., paths, scoring priorities)."
+    }
+}
+
+PIT_NOTES = {
+    'questions': [
+        {'name': 'robot_strengths', 'label': 'Robot Strengths', 'type': 'textarea', 'help': 'What does this robot do well?'},
+        {'name': 'robot_weaknesses', 'label': 'Robot Weaknesses', 'type': 'textarea', 'help': 'What are the robot’s limitations or weaknesses?'},
+        {'name': 'team_comments', 'label': 'Team Comments', 'type': 'textarea', 'help': 'Any comments from the team about their robot or strategy?'},
+        {'name': 'scouter_notes', 'label': 'Scouter Notes', 'type': 'textarea', 'help': 'Additional observations or notes from the scouter.'}
     ]
 }

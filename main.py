@@ -1,10 +1,9 @@
+# main.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import firebase_admin
-from firebase_admin import credentials, firestore
 import hashlib
-from utils.utils import load_data, calculate_match_score, setup_sidebar_navigation, PAGE_CONFIG
+from utils.utils import load_data, calculate_match_score, setup_sidebar_navigation, PAGE_CONFIG, get_firebase_instances
 
 # Set page configuration as the first command
 st.set_page_config(
@@ -26,31 +25,17 @@ if 'websocket_retry_counter' not in st.session_state:
 # Disable websocket warning messages
 st.set_option('client.showErrorDetails', False)
 
-# Initialize Firebase
+# Initialize Firebase using the utility function
+print("Attempting to initialize Firebase in Main page...")
 try:
-    firebase_creds = {
-        "type": st.secrets["firebase"]["type"],
-        "project_id": st.secrets["firebase"]["project_id"],
-        "private_key_id": st.secrets["firebase"]["private_key_id"],
-        "private_key": st.secrets["firebase"]["private_key"],
-        "client_email": st.secrets["firebase"]["client_email"],
-        "client_id": st.secrets["firebase"]["client_id"],
-        "auth_uri": st.secrets["firebase"]["auth_uri"],
-        "token_uri": st.secrets["firebase"]["token_uri"],
-        "auth_provider_x509_cert_url": st.secrets["firebase"]["auth_provider_x509_cert_url"],
-        "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
-    }
-    if not firebase_admin._apps:
-        cred = credentials.Certificate(firebase_creds)
-        firebase_admin.initialize_app(cred)
-except KeyError as e:
-    st.error(f"Firebase credentials not found in secrets.toml: {e}")
-    st.stop()
+    db, bucket = get_firebase_instances()
+    st.session_state.firebase_db = db
+    st.session_state.firebase_bucket = bucket
+    print("Firebase initialized successfully in Main page")
 except Exception as e:
-    st.error(f"Error initializing Firebase: {e}")
+    st.error(f"Failed to initialize Firebase: {str(e)}")
+    print(f"Firebase initialization failed in Main page: {str(e)}")
     st.stop()
-
-db = firestore.client()
 
 # Function to hash passwords
 def hash_password(password):
@@ -68,6 +53,7 @@ if "active_page" not in st.session_state:
 
 # Check if the users collection is empty and create an initial Owner user
 def initialize_owner_user():
+    db = st.session_state.firebase_db
     users_ref = db.collection('users').limit(1).get()
     if not users_ref:  # If the users collection is empty
         initial_owner = {
@@ -83,6 +69,7 @@ initialize_owner_user()
 
 # Login function using Firestore
 def login(username, password):
+    db = st.session_state.firebase_db
     hashed_password = hash_password(password)
     try:
         # Query the users collection for the username
