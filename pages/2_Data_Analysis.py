@@ -7,23 +7,9 @@ import os
 import time
 from datetime import datetime
 
-# Debug: Print the current working directory and file path
-print("Current working directory:", os.getcwd())
-print("File path of 2_Data_Analysis.py:", os.path.abspath(__file__))
-
 # Add the parent directory to the Python path to ensure utils can be found
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(parent_dir)
-
-# Debug: Print the Python path after modification
-print("Updated Python path:", sys.path)
-
-# Debug: Print the path where we're looking for the utils package
-utils_path = os.path.join(parent_dir, 'utils')
-print("Looking for utils package at:", utils_path)
-print("Does utils directory exist?", os.path.isdir(utils_path))
-print("Does utils/__init__.py exist?", os.path.isfile(os.path.join(utils_path, '__init__.py')))
-print("Does utils/utils.py exist?", os.path.isfile(os.path.join(utils_path, 'utils.py')))
 
 # Try importing from utils.utils
 try:
@@ -905,9 +891,6 @@ with pit_tab:
         for _, row in photo_data.iterrows():
             team = row['team_number']
             photos = [url for url in row['robot_photo_url'] if url and url != '']  # Filter out None or empty URLs
-            
-            # Debug: Log the photo URLs for this team
-            st.write(f"Debug: Photo URLs for Team {team}: {photos}")
             
             if photos:
                 st.markdown(f"**Team {team}**")

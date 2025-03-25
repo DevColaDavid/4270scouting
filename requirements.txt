@@ -8,3 +8,4 @@ google-auth
 streamlit-autorefresh
 pytz
 firebase_admin
+requests

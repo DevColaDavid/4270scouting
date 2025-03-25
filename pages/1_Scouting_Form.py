@@ -1,5 +1,6 @@
 # pages/1_Scouting_Form.py
 import streamlit as st
+import pandas as pd
 from utils.form_config import MATCH_INFO, AUTONOMOUS, TELEOP, ENDGAME, PERFORMANCE_RATINGS, ANALYSIS, MATCH_OUTCOME, STRATEGY
 from utils.form_config import PIT_INFO, ROBOT_SPECIFICATIONS, CAPABILITIES, PIT_STRATEGY, PIT_NOTES
 from utils.utils import save_data, setup_sidebar_navigation, upload_photo_to_storage, get_firebase_instances
@@ -104,7 +105,7 @@ with match_tab:
 
     # Callback function to update session state when a number input changes
     def update_match_number_input(name):
-        st.session_state.match_form_data[name] = st.session_state[name]
+        st.session_state.match_form_data[name] = st.session_state[f'match_{name}']
 
     # Form data dictionary for Match Scouting
     match_form_data = {}
@@ -493,23 +494,41 @@ with match_tab:
     if match_submit_button:
         # Validate required fields
         if not match_form_data.get("team_number") or match_form_data["team_number"] <= 0:
-            st.error("Please enter a valid team number.")
+            st.error("Please enter a valid team number (must be greater than 0).")
         elif not match_form_data.get("match_number") or match_form_data["match_number"] <= 0:
-            st.error("Please enter a valid match number.")
+            st.error("Please enter a valid match number (must be greater than 0).")
         elif not match_form_data.get("scouter_name"):
-            st.error("Please enter the scouter's name.")
+            st.error("Please enter the scouter's name (cannot be empty).")
         elif not match_form_data.get("alliance_color"):
-            st.error("Please select an alliance color.")
+            st.error("Please select an alliance color (Red or Blue).")
         elif not match_form_data.get("starting_position"):
             st.error("Please select a starting position.")
         elif not match_form_data.get("match_outcome"):
-            st.error("Please select the match outcome.")
+            st.error("Please select the match outcome (Win, Loss, or Tie).")
         elif not match_form_data.get("primary_role"):
             st.error("Please select the team's primary role.")
         else:
+            # Ensure numeric fields are integers
+            numeric_fields = [
+                "team_number", "match_number",
+                "auto_coral_l1", "auto_coral_l2", "auto_coral_l3", "auto_coral_l4",
+                "auto_missed_coral_l1", "auto_missed_coral_l2", "auto_missed_coral_l3", "auto_missed_coral_l4",
+                "auto_algae_barge", "auto_algae_processor", "auto_missed_algae_barge", "auto_missed_algae_processor",
+                "auto_algae_removed",
+                "teleop_coral_l1", "teleop_coral_l2", "teleop_coral_l3", "teleop_coral_l4",
+                "teleop_missed_coral_l1", "teleop_missed_coral_l2", "teleop_missed_coral_l3", "teleop_missed_coral_l4",
+                "teleop_algae_barge", "teleop_algae_processor", "teleop_missed_algae_barge", "teleop_missed_algae_processor",
+                "teleop_algae_removed",
+                "defense_rating", "speed_rating", "driver_skill_rating"
+            ]
+            for field in numeric_fields:
+                if field in match_form_data and match_form_data[field] is not None:
+                    match_form_data[field] = int(match_form_data[field])
+
             # Save data to Firestore
-            doc_id = save_data("match_scout_data", match_form_data)
-            if doc_id:
+            success, result = save_data("match_scout_data", match_form_data)
+            if success:
+                doc_id = result
                 st.success(f"Match data submitted successfully! Document ID: {doc_id}")
                 st.balloons()
                 preserved_data = {
@@ -519,8 +538,7 @@ with match_tab:
                 st.session_state.match_form_data = preserved_data
                 st.session_state.match_form_cleared = True
             else:
-                st.error("Failed to submit match data.")
-
+                st.error(f"Failed to submit match data: {result}")
     # Handle form clearing for Match Scouting
     if match_clear_button:
         preserved_data = {
@@ -561,7 +579,7 @@ with pit_tab:
 
     # Callback function to update session state when a number input changes
     def update_pit_number_input(name):
-        st.session_state.pit_form_data[name] = st.session_state[name]
+        st.session_state.pit_form_data[name] = st.session_state[f'pit_{name}']
 
     # Form data dictionary for Pit Scouting
     pit_form_data = {}
@@ -761,16 +779,11 @@ with pit_tab:
 
     # Handle form submission for Pit Scouting
     if pit_submit_button:
-        # Verify Firebase is initialized
-        if 'firebase_db' not in st.session_state or 'firebase_bucket' not in st.session_state:
-            st.error("Firebase is not initialized. Please reload the page.")
-            st.stop()
-        
         # Validate required fields
         if not pit_form_data.get("team_number") or pit_form_data["team_number"] <= 0:
-            st.error("Please enter a valid team number.")
+            st.error("Please enter a valid team number (must be greater than 0).")
         elif not pit_form_data.get("scouter_name"):
-            st.error("Please enter the scouter's name.")
+            st.error("Please enter the scouter's name (cannot be empty).")
         elif not pit_form_data.get("drivetrain_type"):
             st.error("Please select a drivetrain type.")
         elif not pit_form_data.get("endgame_capability"):
@@ -778,6 +791,12 @@ with pit_tab:
         elif not pit_form_data.get("preferred_role"):
             st.error("Please select the team's preferred role.")
         else:
+            # Ensure numeric fields are integers
+            numeric_fields = ["team_number"]
+            for field in numeric_fields:
+                if field in pit_form_data and pit_form_data[field] is not None:
+                    pit_form_data[field] = int(pit_form_data[field])
+
             # Handle photo upload to Firebase Storage
             if robot_photo:
                 photo_url = upload_photo_to_storage(robot_photo, pit_form_data["team_number"])
@@ -788,8 +807,9 @@ with pit_tab:
                     st.warning("Photo upload failed, but form data will still be saved.")
 
             # Save data to Firestore
-            doc_id = save_data("pit_scout_data", pit_form_data)
-            if doc_id:
+            success, result = save_data("pit_scout_data", pit_form_data)
+            if success:
+                doc_id = result
                 st.success(f"Pit data submitted successfully! Document ID: {doc_id}")
                 st.balloons()
                 preserved_data = {
@@ -798,7 +818,7 @@ with pit_tab:
                 st.session_state.pit_form_data = preserved_data
                 st.session_state.pit_form_cleared = True
             else:
-                st.error("Failed to submit pit data.")
+                st.error(f"Failed to submit pit data: {result}")
 
     # Handle form clearing for Pit Scouting
     if pit_clear_button:
@@ -811,3 +831,178 @@ with pit_tab:
     # Reset the form_cleared state after clearing
     if st.session_state.pit_form_cleared and not pit_submit_button and not pit_clear_button:
         st.session_state.pit_form_cleared = False
+
+# --- Inspect Errors in Scouting Data ---
+st.markdown("---")
+st.header("Inspect Scouting Data Errors")
+st.markdown("This section allows you to inspect potential errors in the submitted Match Scouting and Pit Scouting data.")
+
+# Define required fields and expected types
+match_required_fields = [
+    "team_number", "match_number", "scouter_name", "alliance_color",
+    "starting_position", "match_outcome", "primary_role"
+]
+match_numeric_fields = [
+    "team_number", "match_number",
+    "auto_coral_l1_scored", "auto_coral_l2_scored", "auto_coral_l3_scored", "auto_coral_l4_scored",
+    "auto_coral_l1_missed", "auto_coral_l2_missed", "auto_coral_l3_missed", "auto_coral_l4_missed",
+    "auto_algae_to_barge", "auto_algae_to_processor", "auto_algae_to_barge_missed", "auto_algae_to_processor_missed",
+    "auto_algae_removed",
+    "teleop_coral_l1_scored", "teleop_coral_l2_scored", "teleop_coral_l3_scored", "teleop_coral_l4_scored",
+    "teleop_coral_l1_missed", "teleop_coral_l2_missed", "teleop_coral_l3_missed", "teleop_coral_l4_missed",
+    "teleop_algae_to_barge", "teleop_algae_to_processor", "teleop_algae_to_barge_missed", "teleop_algae_to_processor_missed",
+    "teleop_algae_removed",
+    "offensive_rating", "defensive_rating", "mobility_rating", "driver_skill_rating"
+]
+match_rating_fields = [
+    "offensive_rating", "defensive_rating", "mobility_rating", "driver_skill_rating"
+]
+
+pit_required_fields = [
+    "team_number", "scouter_name", "drivetrain_type", "endgame_capability", "preferred_role"
+]
+pit_numeric_fields = ["team_number"]
+
+# Function to fetch data
+def fetch_data(collection_name):
+    try:
+        db, _ = get_firebase_instances()
+        docs = db.collection(collection_name).stream()
+        data = []
+        for doc in docs:
+            doc_data = doc.to_dict()
+            doc_data['doc_id'] = doc.id
+            data.append(doc_data)
+        return pd.DataFrame(data)
+    except Exception as e:
+        st.error(f"Error fetching data from {collection_name}: {e}")
+        return pd.DataFrame()
+
+# Function to inspect errors
+def inspect_scouting_errors(data, required_fields, numeric_fields, rating_fields=None, duplicate_fields=None):
+    errors = []
+    
+    for idx, row in data.iterrows():
+        doc_id = row.get('doc_id', 'Unknown')
+        
+        # Check for missing required fields
+        for field in required_fields:
+            if field not in row or pd.isna(row[field]):
+                errors.append({
+                    "doc_id": doc_id,
+                    "error_type": "Missing Required Field",
+                    "field": field,
+                    "value": None,
+                    "message": f"Required field '{field}' is missing or None"
+                })
+        
+        # Check for invalid data types in numeric fields
+        for field in numeric_fields:
+            if field in row and not pd.isna(row[field]):
+                if not isinstance(row[field], (int, float)) or isinstance(row[field], bool):
+                    errors.append({
+                        "doc_id": doc_id,
+                        "error_type": "Invalid Data Type",
+                        "field": field,
+                        "value": row[field],
+                        "message": f"Field '{field}' should be a number, got {type(row[field])}"
+                    })
+                # Check for negative values in counts
+                if field not in (rating_fields or []) and row[field] < 0:
+                    errors.append({
+                        "doc_id": doc_id,
+                        "error_type": "Out of Range",
+                        "field": field,
+                        "value": row[field],
+                        "message": f"Field '{field}' should not be negative"
+                    })
+        
+        # Check rating fields (1-5)
+        if rating_fields:
+            for field in rating_fields:
+                if field in row and not pd.isna(row[field]):
+                    if not isinstance(row[field], (int, float)):
+                        errors.append({
+                            "doc_id": doc_id,
+                            "error_type": "Invalid Data Type",
+                            "field": field,
+                            "value": row[field],
+                            "message": f"Rating field '{field}' should be a number, got {type(row[field])}"
+                        })
+                    elif row[field] < 1 or row[field] > 5:
+                        errors.append({
+                            "doc_id": doc_id,
+                            "error_type": "Out of Range",
+                            "field": field,
+                            "value": row[field],
+                            "message": f"Rating field '{field}' should be between 1 and 5"
+                        })
+    
+    # Check for duplicates
+    if duplicate_fields and not data.empty:
+        duplicates = data.duplicated(subset=duplicate_fields, keep=False)
+        for idx, is_duplicate in enumerate(duplicates):
+            if is_duplicate:
+                row = data.iloc[idx]
+                doc_id = row.get('doc_id', 'Unknown')
+                duplicate_values = {field: row[field] for field in duplicate_fields}
+                errors.append({
+                    "doc_id": doc_id,
+                    "error_type": "Duplicate Entry",
+                    "field": ", ".join(duplicate_fields),
+                    "value": duplicate_values,
+                    "message": f"Duplicate entry for {duplicate_values}"
+                })
+    
+    return pd.DataFrame(errors)
+
+# Inspect Match Scouting Data
+st.subheader("Match Scouting Data Errors")
+match_data = fetch_data("match_scout_data")
+if not match_data.empty:
+    match_errors = inspect_scouting_errors(
+        match_data,
+        required_fields=match_required_fields,
+        numeric_fields=match_numeric_fields,
+        rating_fields=match_rating_fields,
+        duplicate_fields=["team_number", "match_number"]
+    )
+    if not match_errors.empty:
+        st.dataframe(match_errors, use_container_width=True)
+        csv = match_errors.to_csv(index=False)
+        st.download_button(
+            label="Download Match Scouting Errors as CSV",
+            data=csv,
+            file_name="match_scouting_errors.csv",
+            mime="text/csv",
+            key="download_match_errors_csv"
+        )
+    else:
+        st.success("No errors found in the Match Scouting data.")
+else:
+    st.info("No Match Scouting data available to inspect.")
+
+# Inspect Pit Scouting Data
+st.subheader("Pit Scouting Data Errors")
+pit_data = fetch_data("pit_scout_data")
+if not pit_data.empty:
+    pit_errors = inspect_scouting_errors(
+        pit_data,
+        required_fields=pit_required_fields,
+        numeric_fields=pit_numeric_fields,
+        duplicate_fields=["team_number"]
+    )
+    if not pit_errors.empty:
+        st.dataframe(pit_errors, use_container_width=True)
+        csv = pit_errors.to_csv(index=False)
+        st.download_button(
+            label="Download Pit Scouting Errors as CSV",
+            data=csv,
+            file_name="pit_scouting_errors.csv",
+            mime="text/csv",
+            key="download_pit_errors_csv"
+        )
+    else:
+        st.success("No errors found in the Pit Scouting data.")
+else:
+    st.info("No Pit Scouting data available to inspect.")

@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import hashlib
-from utils.utils import load_data, calculate_match_score, setup_sidebar_navigation, PAGE_CONFIG, get_firebase_instances
+from utils.utils import load_data, load_pit_data, calculate_match_score, setup_sidebar_navigation, PAGE_CONFIG, get_firebase_instances
 
 # Set page configuration as the first command
 st.set_page_config(
@@ -26,15 +26,12 @@ if 'websocket_retry_counter' not in st.session_state:
 st.set_option('client.showErrorDetails', False)
 
 # Initialize Firebase using the utility function
-print("Attempting to initialize Firebase in Main page...")
 try:
     db, bucket = get_firebase_instances()
     st.session_state.firebase_db = db
     st.session_state.firebase_bucket = bucket
-    print("Firebase initialized successfully in Main page")
 except Exception as e:
     st.error(f"Failed to initialize Firebase: {str(e)}")
-    print(f"Firebase initialization failed in Main page: {str(e)}")
     st.stop()
 
 # Function to hash passwords
@@ -184,8 +181,8 @@ def display_recent_matches():
     except Exception as e:
         st.error(f"Error loading recent responses: {str(e)}")
 
-# Display quick stats
-def display_quick_stats():
+# Display quick stats for match scouting
+def display_quick_stats_match():
     try:
         df = load_data()
         if df is not None and not df.empty:
@@ -206,29 +203,58 @@ def display_quick_stats():
             else:
                 st.warning("Match scores not calculated due to missing data.")
 
-            st.subheader("Quick Stats")
+            st.subheader("Match Scouting Quick Stats")
             col1, col2, col3 = st.columns(3)
 
             with col1:
-                st.metric("Total Responses", len(df))
+                st.metric("Total Match Responses", len(df))
 
             with col2:
                 if 'team_number' in df.columns:
-                    st.metric("Teams Scouted", df['team_number'].nunique())
+                    st.metric("Teams Scouted (Matches)", df['team_number'].nunique())
                 else:
-                    st.metric("Teams Scouted", "N/A")
+                    st.metric("Teams Scouted (Matches)", "N/A")
 
             with col3:
                 if 'total_score' in df.columns:
                     avg_score = df['total_score'].mean()
-                    st.metric("Avg Score", f"{avg_score:.1f}")
+                    st.metric("Avg Match Score", f"{avg_score:.1f}")
                 else:
-                    st.metric("Avg Score", "N/A")
+                    st.metric("Avg Match Score", "N/A")
         else:
-            st.info("No statistics available yet. Add match data to see stats.")
+            st.info("No match scouting data available yet. Add match data to see stats.")
     except Exception as e:
-        st.error(f"Error loading statistics: {str(e)}")
+        st.error(f"Error loading match scouting statistics: {str(e)}")
+
+# Display quick stats for pit scouting
+def display_quick_stats_pit():
+    try:
+        df = load_pit_data()
+        if df is not None and not df.empty:
+            st.subheader("Pit Scouting Quick Stats")
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric("Total Pit Responses", len(df))
+
+            with col2:
+                if 'team_number' in df.columns:
+                    st.metric("Teams Scouted (Pit)", df['team_number'].nunique())
+                else:
+                    st.metric("Teams Scouted (Pit)", "N/A")
+
+            with col3:
+                if 'drivetrain_type' in df.columns:
+                    swerve_teams = df[df['drivetrain_type'] == 'Swerve'].shape[0]
+                    st.metric("Teams with Swerve", swerve_teams)
+                else:
+                    st.metric("Teams with Swerve", "N/A")
+        else:
+            st.info("No pit scouting data available yet. Add pit data to see stats.")
+    except Exception as e:
+        st.error(f"Error loading pit scouting statistics: {str(e)}")
 
 # App Layout (only shown on the "Main" page)
-display_quick_stats()
+display_quick_stats_match()
+display_quick_stats_pit()
 display_recent_matches()

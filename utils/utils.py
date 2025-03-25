@@ -113,98 +113,84 @@ def get_firebase_instances():
     if "firebase_bucket" not in st.session_state:
         st.session_state.firebase_bucket = None
 
-    # Force reinitialization to ensure the correct bucket is used
-    # Remove any existing Firebase apps to start fresh
-    if firebase_admin._apps:
-        print("Firebase app already exists. Deleting existing app to reinitialize...")
-        firebase_admin.delete_app(firebase_admin.get_app())
-        st.session_state.firebase_initialized = False
-        st.session_state.firebase_db = None
-        st.session_state.firebase_bucket = None
-
-    # Initialize Firebase
-    print("Initializing Firebase...")
-    try:
-        # Determine the bucket name dynamically
-        if "firebase" in st.secrets:
-            # Running on Streamlit Cloud
-            print("Running on Streamlit Cloud, loading secrets...")
-            firebase_config = st.secrets["firebase"]
-            print(f"Firebase config loaded: project_id={firebase_config.get('project_id')}")
-            cred = credentials.Certificate({
-                "type": firebase_config["type"],
-                "project_id": firebase_config["project_id"],
-                "private_key_id": firebase_config["private_key_id"],
-                "private_key": firebase_config["private_key"].replace("\\n", "\n"),
-                "client_email": firebase_config["client_email"],
-                "client_id": firebase_config["client_id"],
-                "auth_uri": firebase_config["auth_uri"],
-                "token_uri": firebase_config["token_uri"],
-                "auth_provider_x509_cert_url": firebase_config["auth_provider_x509_cert_url"],
-                "client_x509_cert_url": firebase_config["client_x509_cert_url"],
-                "universe_domain": "googleapis.com"
-            })
-            # Use the project_id to construct the default bucket name
-            project_id = firebase_config["project_id"]
-            default_bucket = f"{project_id}.firebasestorage.app"  # Correct bucket name
-            app_options = {
-                "storageBucket": firebase_config.get("storageBucket", default_bucket)
-            }
-        else:
-            # Running locally
-            print("Running locally, loading firestore-key.json...")
-            cred = credentials.Certificate("firestore-key.json")
-            project_id = "scouting4270"  # Your confirmed project ID
-            default_bucket = f"{project_id}.firebasestorage.app"  # Correct bucket name
-            app_options = {
-                "storageBucket": default_bucket
-            }
-        
-        print(f"Using storage bucket: {app_options['storageBucket']}")
-        
-        # Initialize the Firebase app
-        app = firebase_admin.initialize_app(cred, app_options)
-        print("Firebase app initialized successfully")
-        
-        # Initialize Firestore and Storage
-        db = firestore.client(app=app)
-        bucket = storage.bucket(app_options["storageBucket"], app=app)
-        
+    # Only initialize if not already initialized
+    if not st.session_state.firebase_initialized:
         try:
-            blobs = bucket.list_blobs(max_results=1)
-            print("Successfully accessed the bucket. Bucket exists and is accessible.")
-            for blob in blobs:
-                print(f"Found blob in bucket: {blob.name}")
-        except Exception as e:
-            print(f"Failed to access the bucket during initialization: {str(e)}")
-            raise Exception(f"Failed to access the bucket during initialization: {str(e)}")
-        
-        # Store in session state
-        st.session_state.firebase_db = db
-        st.session_state.firebase_bucket = bucket
-        st.session_state.firebase_initialized = True
-        print("Firebase initialized successfully")
-    except Exception as e:
-        print(f"Failed to initialize Firebase: {str(e)}")
-        raise Exception(f"Failed to initialize Firebase: {str(e)}")
+            # Remove any existing Firebase apps to start fresh
+            if firebase_admin._apps:
+                firebase_admin.delete_app(firebase_admin.get_app())
+                st.session_state.firebase_initialized = False
+                st.session_state.firebase_db = None
+                st.session_state.firebase_bucket = None
 
-    if st.session_state.firebase_db is None or st.session_state.firebase_bucket is None:
-        raise Exception("Firebase initialization failed. Check logs for details.")
+            # Determine the bucket name dynamically
+            if "firebase" in st.secrets:
+                # Running on Streamlit Cloud
+                firebase_config = st.secrets["firebase"]
+                cred = credentials.Certificate({
+                    "type": firebase_config["type"],
+                    "project_id": firebase_config["project_id"],
+                    "private_key_id": firebase_config["private_key_id"],
+                    "private_key": firebase_config["private_key"].replace("\\n", "\n"),
+                    "client_email": firebase_config["client_email"],
+                    "client_id": firebase_config["client_id"],
+                    "auth_uri": firebase_config["auth_uri"],
+                    "token_uri": firebase_config["token_uri"],
+                    "auth_provider_x509_cert_url": firebase_config["auth_provider_x509_cert_url"],
+                    "client_x509_cert_url": firebase_config["client_x509_cert_url"],
+                    "universe_domain": "googleapis.com"
+                })
+                # Use the project_id to construct the default bucket name
+                project_id = firebase_config["project_id"]
+                default_bucket = f"{project_id}.firebasestorage.app"  # Correct bucket name
+                app_options = {
+                    "storageBucket": firebase_config.get("storageBucket", default_bucket)
+                }
+            else:
+                # Running locally
+                cred = credentials.Certificate("firestore-key.json")
+                project_id = "scouting4270"  # Your confirmed project ID
+                default_bucket = f"{project_id}.firebasestorage.app"  # Correct bucket name
+                app_options = {
+                    "storageBucket": default_bucket
+                }
+            
+            # Initialize the Firebase app
+            app = firebase_admin.initialize_app(cred, app_options)
+            
+            # Initialize Firestore and Storage
+            db = firestore.client(app=app)
+            bucket = storage.bucket(app_options["storageBucket"], app=app)
+            
+            # Verify bucket access
+            try:
+                bucket.list_blobs(max_results=1)
+            except Exception as e:
+                st.error(f"Failed to access the bucket during initialization: {str(e)}")
+                raise Exception(f"Failed to access the bucket during initialization: {str(e)}")
+            
+            # Store in session state
+            st.session_state.firebase_db = db
+            st.session_state.firebase_bucket = bucket
+            st.session_state.firebase_initialized = True
+        except Exception as e:
+            st.error(f"Failed to initialize Firebase: {str(e)}")
+            raise Exception(f"Failed to initialize Firebase: {str(e)}")
+
+    # Verify that the Firestore client is valid
+    if st.session_state.firebase_db is None or not hasattr(st.session_state.firebase_db, 'collection'):
+        st.error("Firestore client is not properly initialized.")
+        raise Exception("Firestore client is not properly initialized.")
     
-    print(f"Firebase bucket name in session state: {st.session_state.firebase_bucket.name}")
-    print("Returning Firebase instances")
+    if st.session_state.firebase_bucket is None:
+        st.error("Firebase Storage bucket is not initialized.")
+        raise Exception("Firebase Storage bucket is not initialized.")
+    
     return st.session_state.firebase_db, st.session_state.firebase_bucket
 
 def upload_photo_to_storage(file, team_number, match_number=None):
     try:
-        if 'firebase_bucket' not in st.session_state:
-            raise Exception("Firebase not initialized. Please ensure get_firebase_instances is called.")
-        bucket = st.session_state.firebase_bucket
-        if bucket is None:
-            raise Exception("Firebase Storage bucket not initialized.")
-
-        print(f"Uploading photo to bucket: {bucket.name}")
-        
+        db, bucket = get_firebase_instances()  # Ensure Firebase is initialized
         timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
         team_number = str(team_number)
         if match_number is not None:
@@ -217,25 +203,19 @@ def upload_photo_to_storage(file, team_number, match_number=None):
         blob.upload_from_file(file, content_type=file.type)
         blob.make_public()
         photo_url = blob.public_url
-        print(f"Photo uploaded successfully. URL: {photo_url}")
         return photo_url
     except Exception as e:
         st.error(f"Error uploading photo to Firebase Storage: {str(e)}")
         return None
 
-def save_data(data):
+def save_data(collection_name, data):
     try:
-        if 'firebase_db' not in st.session_state:
-            raise Exception("Firestore database not initialized.")
-        db = st.session_state.firebase_db
-        if db is None:
-            raise Exception("Firestore database not initialized.")
+        db, _ = get_firebase_instances()  # Ensure Firebase is initialized
+        
         if not isinstance(data, dict):
             st.error(f"Expected data to be a dictionary, got {type(data)}")
             return False, None
 
-        print("Saving data to Firestore...")
-        
         cleaned_data = {}
         for k, v in data.items():
             if isinstance(v, pd.Series):
@@ -261,10 +241,14 @@ def save_data(data):
             return False, None
 
         if "drivetrain_type" in cleaned_data:
+            if collection_name != PIT_SCOUT_COLLECTION:
+                st.warning(f"Expected collection '{PIT_SCOUT_COLLECTION}' for pit data, but got '{collection_name}'. Using '{PIT_SCOUT_COLLECTION}'.")
             collection_name = PIT_SCOUT_COLLECTION
             timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
             doc_id = f"team{team_number}_pit_{timestamp}"
         else:
+            if collection_name != MATCH_SCOUT_COLLECTION:
+                st.warning(f"Expected collection '{MATCH_SCOUT_COLLECTION}' for match data, but got '{collection_name}'. Using '{MATCH_SCOUT_COLLECTION}'.")
             collection_name = MATCH_SCOUT_COLLECTION
             if 'match_number' not in cleaned_data or cleaned_data['match_number'] is None:
                 st.error("Match number is missing in match data.")
@@ -276,8 +260,9 @@ def save_data(data):
             timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
             doc_id = f"team{team_number}_match{match_number}_{timestamp}"
 
-        db.collection(collection_name).document(doc_id).set(cleaned_data)
-        print(f"Data saved successfully. Document ID: {doc_id}")
+        # Create the document reference and save the data
+        doc_ref = db.collection(collection_name).document(doc_id)
+        doc_ref.set(cleaned_data)
         return True, doc_id
     except Exception as e:
         st.error(f"Error saving data to Firestore: {str(e)}")
@@ -285,11 +270,7 @@ def save_data(data):
 
 def load_data():
     try:
-        if 'firebase_db' not in st.session_state:
-            raise Exception("Firestore database not initialized.")
-        db = st.session_state.firebase_db
-        if db is None:
-            raise Exception("Firestore database not initialized.")
+        db, _ = get_firebase_instances()  # Ensure Firebase is initialized
         docs = db.collection(MATCH_SCOUT_COLLECTION).stream()
         data = []
         for doc in docs:
@@ -321,11 +302,7 @@ def load_data():
 
 def load_pit_data():
     try:
-        if 'firebase_db' not in st.session_state:
-            raise Exception("Firestore database not initialized.")
-        db = st.session_state.firebase_db
-        if db is None:
-            raise Exception("Firestore database not initialized.")
+        db, _ = get_firebase_instances()  # Ensure Firebase is initialized
         docs = db.collection(PIT_SCOUT_COLLECTION).stream()
         data = []
         for doc in docs:
@@ -349,10 +326,6 @@ def load_pit_data():
         if 'robot_photo_url' in df.columns:
             # Convert to string and handle None/NaN values
             df['robot_photo_url'] = df['robot_photo_url'].astype(str).replace('nan', '').replace('None', '')
-            # Debug: Log any non-empty URLs that don't look like valid URLs
-            invalid_urls = df[df['robot_photo_url'].str.len() > 0 & ~df['robot_photo_url'].str.startswith(('http://', 'https://'))]['robot_photo_url']
-            if not invalid_urls.empty:
-                print(f"Debug: Found invalid robot_photo_url values: {invalid_urls.tolist()}")
         return df
     except Exception as e:
         st.error(f"Error loading pit data from Firestore: {str(e)}")
