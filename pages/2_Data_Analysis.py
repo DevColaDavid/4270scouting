@@ -356,17 +356,9 @@ with match_tab:
         leaderboard_data['preferred_role'] = 'N/A'
         leaderboard_data['endgame_capability'] = 'N/A'
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
     # Convert success ratios to percentages
     leaderboard_data['coral_success_ratio'] = leaderboard_data['coral_success_ratio'] * 100
     leaderboard_data['algae_success_ratio'] = leaderboard_data['algae_success_ratio'] * 100
-=======
-=======
->>>>>>> Stashed changes
-# Get any additional columns (e.g., calculated fields like total_score, epa, etc.)
-additional_columns = [col for col in df.columns if col not in desired_column_order]
->>>>>>> Stashed changes
 
     # Rename columns for display
     leaderboard_data = leaderboard_data.rename(columns={
@@ -409,7 +401,6 @@ additional_columns = [col for col in df.columns if col not in desired_column_ord
         "Average Driver Skill Rating": "Average Driver Skill Rating"
     }
 
-<<<<<<< Updated upstream
     # Sort the leaderboard based on the selected metric
     leaderboard_data = leaderboard_data.sort_values(by=sort_column_map[sort_metric], ascending=False)
 
@@ -891,35 +882,35 @@ with pit_tab:
         st.plotly_chart(fig, use_container_width=True)
 
         # Robot Photos Section (Pit Scouting)
-    st.markdown("#### Robot Photos (Pit Scouting)")
-    st.markdown("Photos of robots submitted during pit scouting, organized by team.")
-    if 'robot_photo_url' in pit_df.columns and pit_df['robot_photo_url'].notna().any():
-        # Group by team number and collect all photo URLs for each team
-        photo_data = pit_df.groupby('team_number')['robot_photo_url'].apply(list).reset_index()
-        
-        for _, row in photo_data.iterrows():
-            team = row['team_number']
-            photos = [url for url in row['robot_photo_url'] if url and url != '']  # Filter out None or empty URLs
+        st.markdown("#### Robot Photos (Pit Scouting)")
+        st.markdown("Photos of robots submitted during pit scouting, organized by team.")
+        if 'robot_photo_url' in pit_df.columns and pit_df['robot_photo_url'].notna().any():
+            # Group by team number and collect all photo URLs for each team
+            photo_data = pit_df.groupby('team_number')['robot_photo_url'].apply(list).reset_index()
             
-            if photos:
-                st.markdown(f"**Team {team}**")
-                cols = st.columns(3)  # Display up to 3 photos per row
-                for idx, photo_url in enumerate(photos):
-                    # Validate the URL
-                    if not isinstance(photo_url, str) or not photo_url.startswith(('http://', 'https://')):
-                        with cols[idx % 3]:
-                            st.warning(f"Invalid photo URL for Team {team} (Photo {idx + 1}): {photo_url}")
-                        continue
-                    
-                    # Attempt to display the image
-                    try:
-                        with cols[idx % 3]:
-                            st.image(photo_url, caption=f"Team {team} Pit Photo {idx + 1}", width=200)
-                    except Exception as e:
-                        with cols[idx % 3]:
-                            st.error(f"Failed to load photo for Team {team} (Photo {idx + 1}): {str(e)}")
-    else:
-        st.info("No robot photos available from pit scouting.")
+            for _, row in photo_data.iterrows():
+                team = row['team_number']
+                photos = [url for url in row['robot_photo_url'] if url and url != '']  # Filter out None or empty URLs
+                
+                if photos:
+                    st.markdown(f"**Team {team}**")
+                    cols = st.columns(3)  # Display up to 3 photos per row
+                    for idx, photo_url in enumerate(photos):
+                        # Validate the URL
+                        if not isinstance(photo_url, str) or not photo_url.startswith(('http://', 'https://')):
+                            with cols[idx % 3]:
+                                st.warning(f"Invalid photo URL for Team {team} (Photo {idx + 1}): {photo_url}")
+                            continue
+                        
+                        # Attempt to display the image
+                        try:
+                            with cols[idx % 3]:
+                                st.image(photo_url, caption=f"Team {team} Pit Photo {idx + 1}", width=200)
+                        except Exception as e:
+                            with cols[idx % 3]:
+                                st.error(f"Failed to load photo for Team {team} (Photo {idx + 1}): {str(e)}")
+        else:
+            st.info("No robot photos available from pit scouting.")
 
         # Team Comments and Scouter Notes
         st.markdown("#### Team Comments and Scouter Notes")
@@ -968,13 +959,3 @@ with pit_tab:
             file_name="pit_scouting_data.csv",
             mime="text/csv"
         )
-=======
-# Download button for raw data
-csv = df.to_csv(index=False)
-st.download_button(
-    label="Download Raw Data as CSV",
-    data=csv,
-    file_name="scouting_data.csv",
-    mime="text/csv"
-)
->>>>>>> Stashed changes
