@@ -357,10 +357,13 @@ with match_tab:
         leaderboard_data['endgame_capability'] = 'N/A'
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     # Convert success ratios to percentages
     leaderboard_data['coral_success_ratio'] = leaderboard_data['coral_success_ratio'] * 100
     leaderboard_data['algae_success_ratio'] = leaderboard_data['algae_success_ratio'] * 100
 =======
+=======
+>>>>>>> Stashed changes
 # Get any additional columns (e.g., calculated fields like total_score, epa, etc.)
 additional_columns = [col for col in df.columns if col not in desired_column_order]
 >>>>>>> Stashed changes
