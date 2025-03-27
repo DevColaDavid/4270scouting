@@ -23,7 +23,7 @@ setup_sidebar_navigation()
 # Check user authority
 allowed_authorities = ["Admin", "Owner"]
 if st.session_state.get("authority") not in allowed_authorities:
-    st.error("You do not have the required authority to access this page. Required: Admin, or Owner.")
+    st.error("You do not have the required authority to access this page. Required: Admin or Owner.")
     st.stop()
 
 # Track the active page
@@ -2085,7 +2085,7 @@ with main_tabs[1]:
             with st.form("add_user_form"):
                 new_username = st.text_input("Username")
                 new_password = st.text_input("Password", type="password")
-                new_authority = st.selectbox("Authority", options=["Scouter", "Viewer", "Admin", "Owner"])
+                new_authority = st.selectbox("Authority", options=["Scouter", "Admin", "Owner"])
                 if st.form_submit_button("Add User"):
                     if new_username and new_password:
                         add_user(new_username, new_password, new_authority)
@@ -2103,12 +2103,7 @@ with main_tabs[1]:
                 with st.form("edit_user_form"):
                     edit_username = st.text_input("Username", value=selected_user['username'], key="edit_user_username")
                     edit_password = st.text_input("New Password (leave blank to keep unchanged)", type="password", key="edit_user_password")
-                    edit_authority = st.selectbox(
-                        "Authority",
-                        options=["Scouter", "Viewer", "Admin", "Owner"],
-                        index=["Scouter", "Viewer", "Admin", "Owner"].index(selected_user['authority']) if selected_user['authority'] in ["Scouter", "Viewer", "Admin", "Owner"] else 0,  # Handle existing users
-                        key="edit_user_authority"
-                    )
+                    edit_authority = st.selectbox("Authority", options=["Scouter", "Admin", "Owner"], index=["Scouter", "Admin", "Owner"].index(selected_user['authority']), key="edit_user_authority")
                     if st.form_submit_button("Update User"):
                         if edit_username:
                             update_user(selected_user_id, edit_username, edit_password, edit_authority)
