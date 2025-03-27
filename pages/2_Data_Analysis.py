@@ -356,9 +356,14 @@ with match_tab:
         leaderboard_data['preferred_role'] = 'N/A'
         leaderboard_data['endgame_capability'] = 'N/A'
 
+<<<<<<< Updated upstream
     # Convert success ratios to percentages
     leaderboard_data['coral_success_ratio'] = leaderboard_data['coral_success_ratio'] * 100
     leaderboard_data['algae_success_ratio'] = leaderboard_data['algae_success_ratio'] * 100
+=======
+# Get any additional columns (e.g., calculated fields like total_score, epa, etc.)
+additional_columns = [col for col in df.columns if col not in desired_column_order]
+>>>>>>> Stashed changes
 
     # Rename columns for display
     leaderboard_data = leaderboard_data.rename(columns={
@@ -401,6 +406,7 @@ with match_tab:
         "Average Driver Skill Rating": "Average Driver Skill Rating"
     }
 
+<<<<<<< Updated upstream
     # Sort the leaderboard based on the selected metric
     leaderboard_data = leaderboard_data.sort_values(by=sort_column_map[sort_metric], ascending=False)
 
@@ -959,3 +965,13 @@ with pit_tab:
             file_name="pit_scouting_data.csv",
             mime="text/csv"
         )
+=======
+# Download button for raw data
+csv = df.to_csv(index=False)
+st.download_button(
+    label="Download Raw Data as CSV",
+    data=csv,
+    file_name="scouting_data.csv",
+    mime="text/csv"
+)
+>>>>>>> Stashed changes
