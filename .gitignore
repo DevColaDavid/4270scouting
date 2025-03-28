@@ -175,3 +175,4 @@ cython_debug/
 firestore-key.json
 scouting_data.csv
 .streamlit/secrets.toml
+.streamlit

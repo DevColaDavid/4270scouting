@@ -4,13 +4,10 @@ import streamlit as st
 import os
 
 def get_tba_api_key():
-    # Hard-coded API key as a guaranteed fallback
-    api_key = "AtRqAwQCHvqjWbR0byQNshqReqs3dhub4sQkIxRnN0OuvUAZ3WdMaxtzdzWfOKGi"
-    
     # Try Replit environment variables first (this is where Replit Secrets go)
     try:
         import os
-        env_key = os.environ.get('TBA_API_KEY')
+        env_key = st.secrets["TBA"]["TBA_API_KEY"]
         if env_key and len(env_key.strip()) > 0:
             api_key = env_key
             print("Found API key in environment variables")

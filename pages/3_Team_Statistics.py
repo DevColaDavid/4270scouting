@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import requests
 from utils.utils import load_data, load_pit_data, calculate_match_score
 from utils.utils import setup_sidebar_navigation
-
+from utils.tba_api import get_tba_api_key
 st.set_page_config(page_title="Team Statistics", page_icon="📊", layout="wide", initial_sidebar_state="collapsed")
 
 # Check if the user is logged in
@@ -572,7 +572,7 @@ else:
     role_distribution = pd.DataFrame({'team_number': [selected_team], 'Offense': [0], 'Defense': [0], 'Both': [0], 'Neither': [0]})
 
 # Fetch team data from The Blue Alliance API
-TBA_AUTH_KEY = "AtRqAwQCHvqjWbR0byQNshqReqs3dhub4sQkIxRnN0OuvUAZ3WdMaxtzdzWfOKGi"  # Replace with your TBA Auth Key
+TBA_AUTH_KEY = get_tba_api_key()
 team_info = fetch_team_data(selected_team, TBA_AUTH_KEY)
 
 # Get robot image from pit scouting data
