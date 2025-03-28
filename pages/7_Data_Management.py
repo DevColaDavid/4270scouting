@@ -2103,7 +2103,12 @@ with main_tabs[1]:
                 with st.form("edit_user_form"):
                     edit_username = st.text_input("Username", value=selected_user['username'], key="edit_user_username")
                     edit_password = st.text_input("New Password (leave blank to keep unchanged)", type="password", key="edit_user_password")
-                    edit_authority = st.selectbox("Authority", options=["Scouter", "Admin", "Owner"], index=["Scouter", "Admin", "Owner"].index(selected_user['authority']), key="edit_user_authority")
+                    # Safely determine the index for edit_authority
+                    authority_options = ["Scouter", "Admin", "Owner"]
+                    default_authority = selected_user.get('authority', "Scouter")  # Default to "Scouter" if not found
+                    authority_index = authority_options.index(default_authority) if default_authority in authority_options else 0
+                    edit_authority = st.selectbox("Authority", options=authority_options, index=authority_index, key="edit_user_authority")
+                    # Add the submit button directly in the form
                     if st.form_submit_button("Update User"):
                         if edit_username:
                             update_user(selected_user_id, edit_username, edit_password, edit_authority)
