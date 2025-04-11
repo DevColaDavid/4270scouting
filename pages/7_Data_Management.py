@@ -2135,7 +2135,7 @@ with pit_tabs[8]:
             with st.form("add_user_form"):
                 new_username = st.text_input("Username")
                 new_password = st.text_input("Password", type="password")
-                new_authority = st.selectbox("Authority", options=["Scouter", "Admin", "Owner"])
+                new_authority = st.selectbox("Authority", options=["Viewer","Scouter", "Admin", "Owner"])
                 if st.form_submit_button("Add User"):
                     if new_username and new_password:
                         add_user(new_username, new_password, new_authority)
@@ -2154,8 +2154,8 @@ with pit_tabs[8]:
                     edit_username = st.text_input("Username", value=selected_user['username'], key="edit_user_username")
                     edit_password = st.text_input("New Password (leave blank to keep unchanged)", type="password", key="edit_user_password")
                     # Safely determine the index for edit_authority
-                    authority_options = ["Scouter", "Admin", "Owner"]
-                    default_authority = selected_user.get('authority', "Scouter")  # Default to "Scouter" if not found
+                    authority_options = ["Viewer","Scouter", "Admin", "Owner"]
+                    default_authority = selected_user.get('authority', "Viewer")  # Default to "Viewer" if not found
                     authority_index = authority_options.index(default_authority) if default_authority in authority_options else 0
                     edit_authority = st.selectbox("Authority", options=authority_options, index=authority_index, key="edit_user_authority")
                     # Add the submit button directly in the form
