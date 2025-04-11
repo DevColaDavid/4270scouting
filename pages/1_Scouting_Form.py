@@ -551,15 +551,14 @@ with pit_tab:
     # Function to get the current value of a field, considering form clearing
     def get_pit_field_value(name, default_value):
         if st.session_state.pit_form_cleared:
-            # Preserve scouter_name
             if name == "scouter_name":
                 return st.session_state.pit_form_data.get(name, default_value)
-            # Special case for team_number, drivetrain_type, endgame_capability, preferred_role: default to None
-            if name in ["team_number", "drivetrain_type", "endgame_capability", "preferred_role"]:
+            if name in ["team_number", "drivetrain_type", "endgame_capability", "preferred_role", 
+                        "programming_language", "coral_pickup_method", "algae_pickup_method"]:
                 return None
             return default_value
-        # Special case for team_number, drivetrain_type, endgame_capability, preferred_role: default to None if not set
-        if name in ["team_number", "drivetrain_type", "endgame_capability", "preferred_role"] and name not in st.session_state.pit_form_data:
+        if name in ["team_number", "drivetrain_type", "endgame_capability", "preferred_role", 
+                    "programming_language", "coral_pickup_method", "algae_pickup_method"] and name not in st.session_state.pit_form_data:
             return None
         return st.session_state.pit_form_data.get(name, default_value)
 
@@ -601,9 +600,9 @@ with pit_tab:
 
     # Robot Specifications Section (Green: #28A745)
     st.markdown('<div style="color: #28A745; font-size: 24px; font-weight: bold; margin-bottom: 10px">Robot Specifications</div>', unsafe_allow_html=True)
-    # Drivetrain
     col1, col2, col3 = st.columns(3)
     with col1:
+        # Drivetrain
         item = ROBOT_SPECIFICATIONS['drivetrain']
         name = item['name']
         options = item['options']
@@ -626,7 +625,23 @@ with pit_tab:
         )
         pit_form_data[name] = selected_value if selected_value is not None else None
     with col2:
-        pass  # Empty column for spacing
+        # Programming Language (New Question)
+        name = "programming_language"
+        options = ["Java", "C++", "Python", "Other"]
+        current_value = get_pit_field_value(name, None)
+        display_options = [None] + options
+        if current_value is None:
+            index = 0
+        else:
+            index = options.index(current_value) + 1
+        selected_value = st.selectbox(
+            "Programming Language",
+            options=display_options,
+            index=index,
+            key=f"pit_{name}",
+            format_func=format_option
+        )
+        pit_form_data[name] = selected_value if selected_value is not None else None
     with col3:
         pass  # Empty column for spacing
 
@@ -656,8 +671,8 @@ with pit_tab:
                 value=get_pit_field_value(name, False)
             )
 
-    # Endgame Capability
-    col1, col2, col3 = st.columns([1, 2, 2])
+    # Endgame Capability and New Pickup Questions
+    col1, col2, col3 = st.columns(3)
     with col1:
         item = CAPABILITIES['endgame']
         name = item['name']
@@ -681,9 +696,41 @@ with pit_tab:
         )
         pit_form_data[name] = selected_value if selected_value is not None else None
     with col2:
-        pass  # Empty column for spacing
+        # Coral Pickup Method (New Question)
+        name = "coral_pickup_method"
+        options = ["Station", "Ground", "Both", "Neither"]
+        current_value = get_pit_field_value(name, None)
+        display_options = [None] + options
+        if current_value is None:
+            index = 0
+        else:
+            index = options.index(current_value) + 1
+        selected_value = st.selectbox(
+            "Coral Pickup Method",
+            options=display_options,
+            index=index,
+            key=f"pit_{name}",
+            format_func=format_option
+        )
+        pit_form_data[name] = selected_value if selected_value is not None else None
     with col3:
-        pass  # Empty column for spacing
+        # Algae Pickup Method (New Question)
+        name = "algae_pickup_method"
+        options = ["Ground", "Reef", "Both", "Neither"]
+        current_value = get_pit_field_value(name, None)
+        display_options = [None] + options
+        if current_value is None:
+            index = 0
+        else:
+            index = options.index(current_value) + 1
+        selected_value = st.selectbox(
+            "Algae Pickup Method",
+            options=display_options,
+            index=index,
+            key=f"pit_{name}",
+            format_func=format_option
+        )
+        pit_form_data[name] = selected_value if selected_value is not None else None
 
     # Horizontal line after Capabilities (Orange: #FD7E14)
     st.markdown('<hr style="border-top: 5px solid #FD7E14; margin: 20px 0;">', unsafe_allow_html=True)
@@ -730,7 +777,6 @@ with pit_tab:
     # Robot Photo Section (Purple: #800080)
     st.markdown('<div style="color: #800080; font-size: 24px; font-weight: bold; margin-bottom: 10px">Robot Photo</div>', unsafe_allow_html=True)
     robot_photo = st.file_uploader("Upload a Photo of the Robot", type=["jpg", "jpeg", "png"], key="pit_robot_photo")
-    # Optional: Preview the uploaded photo
     if robot_photo and not st.session_state.pit_form_cleared:
         st.image(robot_photo, caption="Uploaded Robot Photo Preview", width=300)
 
@@ -765,7 +811,7 @@ with pit_tab:
 
     # Handle form submission for Pit Scouting
     if pit_submit_button:
-        # Validate required fields
+        # Validate required fields, including new ones
         if not pit_form_data.get("team_number") or pit_form_data["team_number"] <= 0:
             st.error("Please enter a valid team number (must be greater than 0).")
         elif not pit_form_data.get("scouter_name"):
@@ -776,6 +822,12 @@ with pit_tab:
             st.error("Please select an endgame capability.")
         elif not pit_form_data.get("preferred_role"):
             st.error("Please select the team's preferred role.")
+        elif not pit_form_data.get("programming_language"):
+            st.error("Please select a programming language.")
+        elif not pit_form_data.get("coral_pickup_method"):
+            st.error("Please select a coral pickup method.")
+        elif not pit_form_data.get("algae_pickup_method"):
+            st.error("Please select an algae pickup method.")
         else:
             # Ensure numeric fields are integers
             numeric_fields = ["team_number"]

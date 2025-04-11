@@ -94,7 +94,8 @@ pit_desired_columns = [
     'timestamp', 'team_number', 'scouter_name', 'drivetrain_type',
     'can_score_coral_l1', 'can_score_coral_l2', 'can_score_coral_l3', 'can_score_coral_l4',
     'can_score_algae_barge', 'can_score_algae_processor', 'can_remove_algae_l1', 'can_remove_algae_l2',
-    'endgame_capability', 'preferred_role', 'auto_strategy',
+    'endgame_capability', 'programming_language', 'coral_pickup_method', 'algae_pickup_method',
+    'preferred_role', 'auto_strategy',
     'robot_strengths', 'robot_weaknesses', 'team_comments', 'scouter_notes',
     'robot_photo_url'
 ]
@@ -105,8 +106,10 @@ match_required_fields = [
     'match_outcome', 'auto_taxi_left', 'climb_status', 'defense_rating', 'speed_rating', 'driver_skill_rating', 'primary_role'
 ]
 
+# Define required fields for error checking
 pit_required_fields = [
-    'team_number', 'scouter_name', 'drivetrain_type', 'endgame_capability', 'preferred_role'
+    'team_number', 'scouter_name', 'drivetrain_type', 'endgame_capability', 'preferred_role',
+    'programming_language', 'coral_pickup_method', 'algae_pickup_method'
 ]
 
 # Define numeric fields that should be non-negative integers
@@ -1580,7 +1583,16 @@ with main_tabs[1]:
                             key=f"edit_pit_drivetrain_type_{selected_doc_id}"
                         )
                     with col2:
-                        pass
+                        programming_language_value = selected_record.get('programming_language', "Java")
+                        programming_language_options = ["Java", "C++", "Python", "Other"]
+                        if programming_language_value not in programming_language_options:
+                            programming_language_value = "Java"
+                        programming_language = st.selectbox(
+                            "Programming Language",
+                            options=programming_language_options,
+                            index=programming_language_options.index(programming_language_value),
+                            key=f"edit_pit_programming_language_{selected_doc_id}"
+                        )
                     with col3:
                         pass
 
@@ -1631,7 +1643,7 @@ with main_tabs[1]:
                             key=f"edit_pit_can_remove_algae_l2_{selected_doc_id}"
                         )
 
-                    col1, col2, col3 = st.columns([1, 2, 2])
+                    col1, col2, col3 = st.columns([1, 1, 1])
                     with col1:
                         endgame_capability_value = selected_record.get('endgame_capability', "None")
                         endgame_capability_options = ["None", "Shallow Climb", "Deep Climb", "Both Shallow and Deep Climb"]
@@ -1644,9 +1656,27 @@ with main_tabs[1]:
                             key=f"edit_pit_endgame_capability_{selected_doc_id}"
                         )
                     with col2:
-                        pass
+                        coral_pickup_method_value = selected_record.get('coral_pickup_method', "Station")
+                        coral_pickup_method_options = ["Station", "Ground", "Both", "Neither"]
+                        if coral_pickup_method_value not in coral_pickup_method_options:
+                            coral_pickup_method_value = "Station"
+                        coral_pickup_method = st.selectbox(
+                            "Coral Pickup Method",
+                            options=coral_pickup_method_options,
+                            index=coral_pickup_method_options.index(coral_pickup_method_value),
+                            key=f"edit_pit_coral_pickup_method_{selected_doc_id}"
+                        )
                     with col3:
-                        pass
+                        algae_pickup_method_value = selected_record.get('algae_pickup_method', "Ground")
+                        algae_pickup_method_options = ["Ground", "Reef", "Both", "Neither"]
+                        if algae_pickup_method_value not in algae_pickup_method_options:
+                            algae_pickup_method_value = "Ground"
+                        algae_pickup_method = st.selectbox(
+                            "Algae Pickup Method",
+                            options=algae_pickup_method_options,
+                            index=algae_pickup_method_options.index(algae_pickup_method_value),
+                            key=f"edit_pit_algae_pickup_method_{selected_doc_id}"
+                        )
 
                     st.markdown("### Strategy")
                     col1, col2 = st.columns(2)
@@ -1734,6 +1764,9 @@ with main_tabs[1]:
                             'can_remove_algae_l1': can_remove_algae_l1,
                             'can_remove_algae_l2': can_remove_algae_l2,
                             'endgame_capability': endgame_capability,
+                            'programming_language': programming_language,
+                            'coral_pickup_method': coral_pickup_method,
+                            'algae_pickup_method': algae_pickup_method,
                             'preferred_role': preferred_role,
                             'auto_strategy': auto_strategy,
                             'robot_strengths': robot_strengths,
@@ -1989,80 +2022,93 @@ with main_tabs[1]:
                 st.info("No pit edit history available.")
 
         # Tab 9: Manage Robot Photos
-        with pit_tabs[8]:
-            st.subheader("Manage Robot Photos")
-            st.markdown("View, update, or delete robot photos for each team. Photos are stored in Firebase Storage, and their URLs are linked in the pit scouting data.")
+with pit_tabs[8]:
+    st.subheader("Manage Robot Photos")
+    st.markdown("View, update, or delete robot photos for each team. Photos are stored in Firebase Storage, and their URLs are linked in the pit scouting data.")
 
-            # Fetch pit data to get team numbers and photo URLs
-            pit_data = fetch_pit_data()
-            if not pit_data.empty:
-                # Create a DataFrame with team numbers, doc_ids, and photo URLs
-                photo_data = pit_data[['team_number', 'doc_id', 'robot_photo_url']].copy()
-                photo_data = photo_data.sort_values('team_number')
+    # Fetch pit data to get team numbers and photo URLs
+    pit_data = fetch_pit_data(force_refresh=True)  # Force refresh to ensure latest data
+    if not pit_data.empty:
+        # Check which required columns are available
+        available_columns = [col for col in ['team_number', 'doc_id', 'robot_photo_url'] if col in pit_data.columns]
+        if not available_columns:
+            st.error("No usable data found in pit scouting records. Expected columns 'team_number', 'doc_id', or 'robot_photo_url' are missing.")
+        elif 'team_number' not in pit_data.columns or 'doc_id' not in pit_data.columns:
+            st.error("Critical columns 'team_number' or 'doc_id' are missing from pit data. Photo management is disabled.")
+        else:
+            # Create a DataFrame with available columns, filling missing ones with defaults
+            photo_data = pit_data[available_columns].copy()
+            if 'robot_photo_url' not in photo_data.columns:
+                photo_data['robot_photo_url'] = None
+            photo_data = photo_data.sort_values('team_number')
 
-                # Display the data with photo previews
-                st.markdown("### Robot Photos Overview")
-                for idx, row in photo_data.iterrows():
-                    team_number = row['team_number']
-                    doc_id = row['doc_id']
-                    photo_url = row.get('robot_photo_url', None)
+            # Display the data with photo previews
+            st.markdown("### Robot Photos Overview")
+            if len(photo_data) > 10:
+                st.warning(f"Found {len(photo_data)} teams. Displaying all teams may take time. Consider filtering in the 'View Pit Data' tab first.")
+            for idx, row in photo_data.iterrows():
+                team_number = row['team_number']
+                doc_id = row['doc_id']
+                photo_url = row.get('robot_photo_url', None)
 
-                    st.markdown(f"#### Team {team_number}")
-                    col1, col2 = st.columns([1, 2])
-                    with col1:
-                        if photo_url and isinstance(photo_url, str) and photo_url.strip():
-                            try:
-                                # Check if the URL is accessible
-                                response = requests.head(photo_url, timeout=5)
-                                if response.status_code == 200:
-                                    st.image(photo_url, caption=f"Robot Photo for Team {team_number}", width=200)
-                                else:
-                                    st.warning(f"Cannot display photo for Team {team_number}. URL is inaccessible (Status Code: {response.status_code}).")
-                            except requests.exceptions.RequestException as e:
-                                st.warning(f"Cannot display photo for Team {team_number}. Error accessing URL: {e}")
-                            except Exception as e:
-                                st.warning(f"Cannot display photo for Team {team_number}. Error: {e}")
-                        else:
-                            st.info(f"No photo available for Team {team_number}.")
-                    with col2:
-                        # Option to upload a new photo
-                        new_photo = st.file_uploader(
-                            f"Upload New Photo for Team {team_number}",
-                            type=["jpg", "jpeg", "png"],
-                            key=f"upload_photo_team_{team_number}"
-                        )
-                        if st.button(f"Update Photo for Team {team_number}", key=f"update_photo_team_{team_number}"):
-                            if new_photo:
-                                # Delete the existing photo if it exists
-                                if photo_url and isinstance(photo_url, str) and photo_url.strip():
-                                    delete_robot_photo(team_number)
-                                # Upload the new photo
-                                new_photo_url = upload_robot_photo(new_photo, team_number)
-                                if new_photo_url:
-                                    # Update the Firestore record
-                                    if update_robot_photo_url(PIT_SCOUT_COLLECTION, doc_id, new_photo_url):
-                                        st.success(f"Successfully updated robot photo for Team {team_number}!")
-                                        st.rerun()
-                                else:
-                                    st.error("Failed to upload the new photo.")
+                st.markdown(f"#### Team {team_number}")
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    if photo_url and isinstance(photo_url, str) and photo_url.strip():
+                        try:
+                            # Check if the URL is accessible
+                            response = requests.head(photo_url, timeout=5)
+                            if response.status_code == 200:
+                                st.image(photo_url, caption=f"Robot Photo for Team {team_number}", width=200)
                             else:
-                                st.warning("Please upload a photo to update.")
-
-                        # Option to delete the photo
-                        if photo_url and isinstance(photo_url, str) and photo_url.strip():
-                            if st.button(f"Delete Photo for Team {team_number}", key=f"delete_photo_team_{team_number}"):
-                                # Delete from Firebase Storage
-                                if delete_robot_photo(team_number):
-                                    # Update Firestore to remove the photo URL
-                                    if update_robot_photo_url(PIT_SCOUT_COLLECTION, doc_id, None):
-                                        st.success(f"Successfully deleted robot photo for Team {team_number}!")
-                                        st.rerun()
-                                    else:
-                                        st.error("Photo deleted from storage, but failed to update the record.")
+                                st.warning(f"Cannot display photo for Team {team_number}. URL is inaccessible (Status Code: {response.status_code}). URL: {photo_url}")
+                        except requests.exceptions.RequestException as e:
+                            st.warning(f"Cannot display photo for Team {team_number}. Error accessing URL: {e}. URL: {photo_url}")
+                        except Exception as e:
+                            st.warning(f"Cannot display photo for Team {team_number}. Error: {e}. URL: {photo_url}")
+                    else:
+                        st.info(f"No photo available for Team {team_number}. Expected URL field is missing or empty in Firestore.")
+                with col2:
+                    # Option to upload a new photo
+                    new_photo = st.file_uploader(
+                        f"Upload New Photo for Team {team_number}",
+                        type=["jpg", "jpeg", "png"],
+                        key=f"upload_photo_team_{team_number}_{doc_id}"  # Add doc_id to ensure unique key
+                    )
+                    if st.button(f"Update Photo for Team {team_number}", key=f"update_photo_team_{team_number}_{doc_id}"):
+                        if new_photo:
+                            # Delete the existing photo if it exists
+                            if photo_url and isinstance(photo_url, str) and photo_url.strip():
+                                delete_robot_photo(team_number)
+                            # Upload the new photo
+                            new_photo_url = upload_robot_photo(new_photo, team_number)
+                            if new_photo_url:
+                                # Update the Firestore record
+                                if update_robot_photo_url(PIT_SCOUT_COLLECTION, doc_id, new_photo_url):
+                                    st.success(f"Successfully updated robot photo for Team {team_number}!")
+                                    st.rerun()
                                 else:
-                                    st.error("Failed to delete the photo from storage.")
-            else:
-                st.info("No pit data available to manage robot photos.")
+                                    st.error("Failed to update the Firestore record with the new photo URL.")
+                            else:
+                                st.error("Failed to upload the new photo to Firebase Storage.")
+                        else:
+                            st.warning("Please upload a photo to update.")
+
+                    # Option to delete the photo
+                    if photo_url and isinstance(photo_url, str) and photo_url.strip():
+                        if st.button(f"Delete Photo for Team {team_number}", key=f"delete_photo_team_{team_number}_{doc_id}"):
+                            # Delete from Firebase Storage
+                            if delete_robot_photo(team_number):
+                                # Update Firestore to remove the photo URL
+                                if update_robot_photo_url(PIT_SCOUT_COLLECTION, doc_id, None):
+                                    st.success(f"Successfully deleted robot photo for Team {team_number}!")
+                                    st.rerun()
+                                else:
+                                    st.error("Photo deleted from storage, but failed to update the Firestore record.")
+                            else:
+                                st.error("Failed to delete the photo from Firebase Storage.")
+    else:
+        st.info("No pit data available to manage robot photos. Please submit pit scouting data first.")
 
     # User Management
     with main_tabs[2]:
@@ -2074,7 +2120,11 @@ with main_tabs[1]:
             st.subheader("View Users")
             users_df = fetch_users()
             if not users_df.empty:
-                display_columns = ['username', 'authority', 'user_id']
+                if st.session_state.username == "owner":
+                    display_columns = ['username', 'password', 'authority', 'user_id']
+                    st.markdown("**Note**: As the owner, you can view hashed passwords. These are SHA-256 hashes and cannot be reversed.")
+                else:
+                    display_columns = ['username', 'authority', 'user_id']
                 st.dataframe(users_df[display_columns], use_container_width=True)
             else:
                 st.info("No users found in the database.")

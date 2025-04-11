@@ -2,10 +2,18 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import requests  # Added for checking image URL accessibility
 from utils.utils import load_data, calculate_match_score
 from utils.utils import setup_sidebar_navigation
+from firebase_admin import firestore  # Added for fetching pit data
 
-st.set_page_config(page_title="Match Prediction", page_icon="📉", layout="wide",initial_sidebar_state="collapsed")
+# Initialize Firestore client
+db = firestore.client()
+
+# Constants (adjust these to match your setup)
+PIT_SCOUT_COLLECTION = "pit_scout_data"  # Same as in 7_Data_Management.py
+
+st.set_page_config(page_title="Match Prediction", page_icon="📉", layout="wide", initial_sidebar_state="collapsed")
 
 # Check if the user is logged in
 if "logged_in" not in st.session_state or not st.session_state.logged_in:
@@ -22,7 +30,7 @@ st.write("This is the Match Prediction page.")
 st.title("📉 Match Prediction")
 st.markdown("Predict the outcome of a match based on historical scouting data.")
 
-# Load data with error handling
+# Load match data with error handling
 try:
     df = load_data()
 except Exception as e:
@@ -235,6 +243,35 @@ else:
     st.error("Team number column not found in data.")
     st.stop()
 
+# Fetch pit scouting data to get robot photos
+# Modified from fetch_pit_data in 7_Data_Management.py, simplified for this page
+def fetch_team_photos():
+    try:
+        docs = db.collection(PIT_SCOUT_COLLECTION)\
+                 .select(['team_number', 'robot_photo_url', 'timestamp'])\
+                 .order_by('timestamp', direction=firestore.Query.DESCENDING)\
+                 .get()
+        data = []
+        for doc in docs:
+            doc_data = doc.to_dict()
+            doc_data['team_number'] = str(doc_data.get('team_number', ''))  # Ensure team_number is a string
+            data.append(doc_data)
+        pit_df = pd.DataFrame(data)
+        if not pit_df.empty:
+            # Keep the most recent record per team (based on timestamp)
+            pit_df = pit_df.sort_values('timestamp', ascending=False).drop_duplicates('team_number', keep='first')
+        return pit_df
+    except Exception as e:
+        st.error(f"Error fetching pit scouting data for robot photos: {e}")
+        return pd.DataFrame()
+
+# Load pit data for photos
+pit_data = fetch_team_photos()
+team_photos = {}
+if not pit_data.empty:
+    for _, row in pit_data.iterrows():
+        team_photos[row['team_number']] = row.get('robot_photo_url', None)
+
 # Prediction logic
 if red_alliance_teams and blue_alliance_teams:
     def calculate_alliance_score(team_metrics, metric='total_score'):
@@ -371,13 +408,153 @@ if red_alliance_teams and blue_alliance_teams:
     red_win_prob = 100 / (1 + np.exp(-k * score_diff))
     blue_win_prob = 100 - red_win_prob
 
-    # Display prediction
+    # Display prediction with robot images in a horizontal layout using Streamlit-native borders
     st.subheader("Match Prediction")
+
+    # Create two columns for Red and Blue Alliances to group the teams
+    col_red, col_blue = st.columns([1, 1], gap="medium")
+
+    # Minimal CSS for border colors and subtle background tints
+    st.markdown(
+        """
+        <style>
+        /* Set border color for Red Alliance */
+        div[data-testid="stVerticalBlockBorderWrapper"][data-border-color="red"] > div {
+            border-color: red !important;
+        }
+        /* Set border color for Blue Alliance */
+        div[data-testid="stVerticalBlockBorderWrapper"][data-border-color="blue"] > div {
+            border-color: blue !important;
+        }
+        /* Subtle background tints */
+        .red-background {
+            background-color: rgba(255, 0, 0, 0.6);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .blue-background {
+            background-color: rgba(0, 0, 255, 0.6);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .team-box {
+            text-align: center;
+            margin: 0 5px; /* Small margin between team boxes */
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Red Alliance Teams
+    with col_red:
+        # Use Streamlit container with border=True for the surrounding border
+        with st.container(border=True):
+            # Set a custom attribute to identify this container for CSS styling
+            st.markdown('<div data-border-color="red" class="red-background">', unsafe_allow_html=True)
+            st.markdown("### Red Alliance")
+            team_cols = st.columns(3)  # 3 columns for Red Alliance teams
+            for idx, team in enumerate(red_alliance_teams):
+                with team_cols[idx]:
+                    st.markdown('<div class="team-box">', unsafe_allow_html=True)
+                    st.markdown(f"**Team {team}**", unsafe_allow_html=True)
+                    photo_url = team_photos.get(team, None)
+                    if photo_url and isinstance(photo_url, str) and photo_url.strip():
+                        try:
+                            # Check if the URL is accessible
+                            response = requests.head(photo_url, timeout=5)
+                            if response.status_code == 200:
+                                st.image(photo_url, caption=f"Team {team}", width=150)
+                            else:
+                                st.markdown(
+                                    '<div style="width: 150px; height: 150px; background-color: #333; color: white; '
+                                    'display: flex; align-items: center; justify-content: center; border-radius: 5px;">'
+                                    'No Image</div>',
+                                    unsafe_allow_html=True
+                                )
+                        except requests.exceptions.RequestException as e:
+                            st.markdown(
+                                '<div style="width: 150px; height: 150px; background-color: #333; color: white; '
+                                'display: flex; align-items: center; justify-content: center; border-radius: 5px;">'
+                                'No Image</div>',
+                                unsafe_allow_html=True
+                            )
+                        except Exception as e:
+                            st.markdown(
+                                '<div style="width: 150px; height: 150px; background-color: #333; color: white; '
+                                'display: flex; align-items: center; justify-content: center; border-radius: 5px;">'
+                                'No Image</div>',
+                                unsafe_allow_html=True
+                            )
+                    else:
+                        st.markdown(
+                            '<div style="width: 150px; height: 150px; background-color: #333; color: white; '
+                            'display: flex; align-items: center; justify-content: center; border-radius: 5px;">'
+                            'No Image</div>',
+                            unsafe_allow_html=True
+                        )
+                    st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    # Blue Alliance Teams
+    with col_blue:
+        # Use Streamlit container with border=True for the surrounding border
+        with st.container(border=True):
+            # Set a custom attribute to identify this container for CSS styling
+            st.markdown('<div data-border-color="blue" class="blue-background">', unsafe_allow_html=True)
+            st.markdown("### Blue Alliance")
+            team_cols = st.columns(3)  # 3 columns for Blue Alliance teams
+            for idx, team in enumerate(blue_alliance_teams):
+                with team_cols[idx]:
+                    st.markdown('<div class="team-box">', unsafe_allow_html=True)
+                    st.markdown(f"**Team {team}**", unsafe_allow_html=True)
+                    photo_url = team_photos.get(team, None)
+                    if photo_url and isinstance(photo_url, str) and photo_url.strip():
+                        try:
+                            # Check if the URL is accessible
+                            response = requests.head(photo_url, timeout=5)
+                            if response.status_code == 200:
+                                st.image(photo_url, caption=f"Team {team}", width=150)
+                            else:
+                                st.markdown(
+                                    '<div style="width: 150px; height: 150px; background-color: #333; color: white; '
+                                    'display: flex; align-items: center; justify-content: center; border-radius: 5px;">'
+                                    'No Image</div>',
+                                    unsafe_allow_html=True
+                                )
+                        except requests.exceptions.RequestException as e:
+                            st.markdown(
+                                '<div style="width: 150px; height: 150px; background-color: #333; color: white; '
+                                'display: flex; align-items: center; justify-content: center; border-radius: 5px;">'
+                                'No Image</div>',
+                                unsafe_allow_html=True
+                            )
+                        except Exception as e:
+                            st.markdown(
+                                '<div style="width: 150px; height: 150px; background-color: #333; color: white; '
+                                'display: flex; align-items: center; justify-content: center; border-radius: 5px;">'
+                                'No Image</div>',
+                                unsafe_allow_html=True
+                            )
+                    else:
+                        st.markdown(
+                            '<div style="width: 150px; height: 150px; background-color: #333; color: white; '
+                            'display: flex; align-items: center; justify-content: center; border-radius: 5px;">'
+                            'No Image</div>',
+                            unsafe_allow_html=True
+                        )
+                    st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    # Display the predicted scores and win probabilities below the images
     col1, col2 = st.columns(2)
     with col1:
+        st.markdown("### Red Alliance")
         st.metric("Red Alliance Total Predicted Score", f"{red_total_score:.2f}", f"95% CI: [{red_ci_lower:.2f}, {red_ci_upper:.2f}]")
         st.metric("Red Alliance Win Probability", f"{red_win_prob:.1f}%")
+
     with col2:
+        st.markdown("### Blue Alliance")
         st.metric("Blue Alliance Total Predicted Score", f"{blue_total_score:.2f}", f"95% CI: [{blue_ci_lower:.2f}, {blue_ci_upper:.2f}]")
         st.metric("Blue Alliance Win Probability", f"{blue_win_prob:.1f}%")
 
