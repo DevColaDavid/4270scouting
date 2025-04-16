@@ -31,7 +31,7 @@ if "logged_in" not in st.session_state or not st.session_state.logged_in:
 setup_sidebar_navigation()
 
 # Check user authority
-allowed_authorities = ["Scouter", "Admin", "Owner"]
+allowed_authorities = ["Scouter", "Admin", "Owner","Alliance"]
 if st.session_state.get("authority") not in allowed_authorities:
     st.error("You do not have the required authority to access this page. Required: Scouter, Admin, or Owner.")
     st.stop()
