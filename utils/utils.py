@@ -16,15 +16,15 @@ import hashlib
 PAGE_CONFIG = {
     "Main": {
         "file": "main.py",
-        "authorities": ["Owner", "Admin", "Scouter", "Viewer"]
+        "authorities": ["Owner", "Admin", "Scouter", "Viewer","Alliance"]
     },
     "Scouting Form": {
         "file": "pages/1_Scouting_Form.py",
-        "authorities": ["Owner", "Admin", "Scouter"]
+        "authorities": ["Owner", "Admin", "Scouter","Alliance"]
     },
     "Data Analysis": {
         "file": "pages/2_Data_Analysis.py",
-        "authorities": ["Owner", "Admin", "Scouter", "Viewer"]
+        "authorities": ["Owner", "Admin", "Scouter", "Viewer","Alliance"]
     },
     "Team Statistics": {
         "file": "pages/3_Team_Statistics.py",
@@ -40,7 +40,7 @@ PAGE_CONFIG = {
     },
     "Match Schedule": {
         "file": "pages/6_Match_Schedule.py",
-        "authorities": ["Owner", "Admin"]
+        "authorities": ["Owner", "Admin", "Scouter", "Viewer"]
     },
     "Data Management": {
         "file": "pages/7_Data_Management.py",
