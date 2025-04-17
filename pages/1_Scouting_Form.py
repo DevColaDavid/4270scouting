@@ -1,9 +1,11 @@
-# pages/1_Scouting_Form.py
+import os
 import streamlit as st
 import pandas as pd
 from utils.form_config import MATCH_INFO, AUTONOMOUS, TELEOP, ENDGAME, PERFORMANCE_RATINGS, ANALYSIS, MATCH_OUTCOME, STRATEGY
 from utils.form_config import PIT_INFO, ROBOT_SPECIFICATIONS, CAPABILITIES, PIT_STRATEGY, PIT_NOTES
 from utils.utils import save_data, setup_sidebar_navigation, upload_photo_to_storage, get_firebase_instances
+from streamlit_cookies_manager import EncryptedCookieManager
+from firebase_admin import firestore
 
 # Set page configuration
 st.set_page_config(
@@ -22,6 +24,37 @@ except Exception as e:
     st.error(f"Failed to initialize Firebase: {str(e)}")
     st.stop()
 
+# Initialize cookies manager with error handling
+try:
+    cookies = EncryptedCookieManager(
+        prefix="scoutingapp/cookies/",
+        password=os.environ.get("COOKIES_PASSWORD", "my-secret-password")
+    )
+    if not cookies.ready():
+        st.spinner("Loading cookies...")
+        st.stop()
+except Exception as e:
+    st.warning("Failed to initialize cookies manager. Persistent login may not work. Please ensure 'streamlit-cookies-manager' is installed and compatible with your Streamlit version.")
+    cookies = None
+
+# Restore login state from cookie if session state is lost
+if cookies and "login_token" in cookies:
+    token = cookies.get("login_token")
+    doc = db.collection("sessions").document(token).get()
+    if doc.exists:
+        data = doc.to_dict()
+        user_id = data["user_id"]
+        st.session_state.logged_in = True
+        st.session_state.user_id = user_id
+        st.session_state.login_token = token
+    else:
+        # Invalid token, remove cookie
+        try:
+            del cookies["login_token"]
+            cookies.save()
+        except:
+            pass
+
 # Check if the user is logged in
 if "logged_in" not in st.session_state or not st.session_state.logged_in:
     st.error("Please log in to access this page.")
@@ -31,7 +64,7 @@ if "logged_in" not in st.session_state or not st.session_state.logged_in:
 setup_sidebar_navigation()
 
 # Check user authority
-allowed_authorities = ["Scouter", "Admin", "Owner","Alliance"]
+allowed_authorities = ["Scouter", "Admin", "Owner", "Alliance"]
 if st.session_state.get("authority") not in allowed_authorities:
     st.error("You do not have the required authority to access this page. Required: Scouter, Admin, or Owner.")
     st.stop()
@@ -471,12 +504,25 @@ with match_tab:
         with col2:
             pass
 
-    # Submit and Clear buttons
+    # Submit and Clear buttons with confirmation
     col1, col2 = st.columns(2)
     with col1:
         match_submit_button = st.button(label="Submit Match Data", key="match_submit_button")
     with col2:
-        match_clear_button = st.button(label="Clear Form", key="match_clear_button")
+        if st.button(label="Clear Form", key="match_clear_button"):
+            st.session_state.match_clear_confirm = True
+
+    if 'match_clear_confirm' in st.session_state and st.session_state.match_clear_confirm:
+        if st.checkbox("Are you sure you want to clear the form? This action cannot be undone."):
+            preserved_data = {
+                "scouter_name": st.session_state.match_form_data.get("scouter_name", ""),
+                "alliance_color": st.session_state.match_form_data.get("alliance_color", None)
+            }
+            st.session_state.match_form_data = preserved_data
+            st.session_state.match_form_cleared = True
+            st.session_state.match_clear_confirm = False
+        else:
+            st.session_state.match_clear_confirm = False
 
     # Update session state
     st.session_state.match_form_data = match_form_data
@@ -527,15 +573,8 @@ with match_tab:
                 st.session_state.match_form_cleared = True
             else:
                 st.error(f"Failed to submit match data: {result}")
-    if match_clear_button:
-        preserved_data = {
-            "scouter_name": st.session_state.match_form_data.get("scouter_name", ""),
-            "alliance_color": st.session_state.match_form_data.get("alliance_color", None)
-        }
-        st.session_state.match_form_data = preserved_data
-        st.session_state.match_form_cleared = True
 
-    if st.session_state.match_form_cleared and not match_submit_button and not match_clear_button:
+    if st.session_state.match_form_cleared and not match_submit_button:
         st.session_state.match_form_cleared = False
 
 # --- Pit Scouting Tab ---
@@ -799,12 +838,24 @@ with pit_tab:
     # Horizontal line after Notes (Cyan: #17A2B8)
     st.markdown('<hr style="border-top: 5px solid #17A2B8; margin: 20px 0;">', unsafe_allow_html=True)
 
-    # Submit and Clear buttons for Pit Scouting
+    # Submit and Clear buttons for Pit Scouting with confirmation
     col1, col2 = st.columns(2)
     with col1:
         pit_submit_button = st.button(label="Submit Pit Data", key="pit_submit_button")
     with col2:
-        pit_clear_button = st.button(label="Clear Form", key="pit_clear_button")
+        if st.button(label="Clear Form", key="pit_clear_button"):
+            st.session_state.pit_clear_confirm = True
+
+    if 'pit_clear_confirm' in st.session_state and st.session_state.pit_clear_confirm:
+        if st.checkbox("Are you sure you want to clear the form? This action cannot be undone."):
+            preserved_data = {
+                "scouter_name": st.session_state.pit_form_data.get("scouter_name", "")
+            }
+            st.session_state.pit_form_data = preserved_data
+            st.session_state.pit_form_cleared = True
+            st.session_state.pit_clear_confirm = False
+        else:
+            st.session_state.pit_clear_confirm = False
 
     # Update session state with the current form data
     st.session_state.pit_form_data = pit_form_data
@@ -858,16 +909,8 @@ with pit_tab:
             else:
                 st.error(f"Failed to submit pit data: {result}")
 
-    # Handle form clearing for Pit Scouting
-    if pit_clear_button:
-        preserved_data = {
-            "scouter_name": st.session_state.pit_form_data.get("scouter_name", "")
-        }
-        st.session_state.pit_form_data = preserved_data
-        st.session_state.pit_form_cleared = True
-
     # Reset the form_cleared state after clearing
-    if st.session_state.pit_form_cleared and not pit_submit_button and not pit_clear_button:
+    if st.session_state.pit_form_cleared and not pit_submit_button:
         st.session_state.pit_form_cleared = False
 
 # --- Inspect Errors in Scouting Data ---
