@@ -1,8 +1,7 @@
-# utils/utils.py
 import os
 import sys
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import streamlit as st
 from google.cloud import firestore
 from google.cloud.firestore_v1.field_path import FieldPath
@@ -11,6 +10,7 @@ from google.oauth2 import service_account
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
 import hashlib
+import uuid
 
 # Define page-to-file mapping and authority-based access
 PAGE_CONFIG = {
@@ -70,7 +70,12 @@ def setup_sidebar_navigation():
         if "logged_in" in st.session_state and st.session_state.logged_in:
             st.write(f"Logged in as: **{st.session_state.username}** ({st.session_state.authority})")
             if st.button("Logout"):
+                # Delete session from Firestore
+                if "session_token" in st.session_state:
+                    delete_session(st.session_state.session_token)
                 # Clear session state
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
                 st.session_state.logged_in = False
                 st.session_state.username = None
                 st.session_state.authority = None
@@ -103,6 +108,7 @@ def setup_sidebar_navigation():
 # Global variables for Firestore collections
 MATCH_SCOUT_COLLECTION = "match_scout_data"
 PIT_SCOUT_COLLECTION = "pit_scout_data"
+SESSION_COLLECTION = "sessions"
 
 def get_firebase_instances():
     # Initialize session state keys if they don't exist
@@ -187,6 +193,51 @@ def get_firebase_instances():
         raise Exception("Firebase Storage bucket is not initialized.")
     
     return st.session_state.firebase_db, st.session_state.firebase_bucket
+
+def create_session(user_id, authority):
+    """Create a new session in Firestore and return the session token."""
+    try:
+        db, _ = get_firebase_instances()
+        session_token = str(uuid.uuid4())
+        session_data = {
+            "user_id": user_id,
+            "authority": authority,
+            "created_at": firestore.SERVER_TIMESTAMP
+        }
+        db.collection(SESSION_COLLECTION).document(session_token).set(session_data)
+        return session_token
+    except Exception as e:
+        st.error(f"Failed to create session: {str(e)}")
+        return None
+
+def validate_session(session_token):
+    """Validate the session token and return user data if valid, else None."""
+    try:
+        db, _ = get_firebase_instances()
+        doc = db.collection(SESSION_COLLECTION).document(session_token).get()
+        if doc.exists:
+            data = doc.to_dict()
+            # Check session expiration (30 days)
+            created_at = data.get("created_at")
+            if created_at:
+                created_at = created_at.replace(tzinfo=None)  # Remove timezone for comparison
+                expiration_days = 30
+                if datetime.now() > created_at + timedelta(days=expiration_days):
+                    delete_session(session_token)  # Clean up expired session
+                    return None
+            return data
+        return None
+    except Exception as e:
+        st.error(f"Failed to validate session: {str(e)}")
+        return None
+
+def delete_session(session_token):
+    """Delete a session from Firestore."""
+    try:
+        db, _ = get_firebase_instances()
+        db.collection(SESSION_COLLECTION).document(session_token).delete()
+    except Exception as e:
+        st.error(f"Failed to delete session: {str(e)}")
 
 def upload_photo_to_storage(file, team_number, match_number=None):
     try:
